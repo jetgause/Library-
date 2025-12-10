@@ -1,115 +1,268 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
-from typing import Optional, List
 import os
-import sys
+import json
+import asyncio
 from pathlib import Path
+from datetime import datetime
+from typing import Optional, List, Dict, Any
+
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-# Add parent directory to path to import book_tracker
-sys.path.append(str(Path(__file__).parent.parent))
-from book_tracker import BookTracker
+# Import core components
+from pulse_core.pulse_engine import PulseEngine
+from pulse_core.models import (
+    TaskCreate,
+    TaskUpdate,
+    TaskResponse,
+    TaskListResponse,
+    AnalyticsResponse,
+    NotificationResponse,
+    HealthResponse
+)
 
-app = FastAPI()
+# Initialize FastAPI app
+app = FastAPI(
+    title="Pulse Task Manager",
+    description="AI-powered intelligent task management system",
+    version="1.0.0"
+)
 
-# Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address, default_limits=["100/hour", "20/minute"])
+# FMA PATCH 5: Rate Limiting Implementation (CRITICAL)
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200/hour", "50/minute"],
+    storage_uri="memory://"
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Initialize book tracker
-tracker = BookTracker()
-
-# Pydantic models
-class BookRating(BaseModel):
-    rating: int
-
-class BookStatus(BaseModel):
-    status: str
-
-class BookSearch(BaseModel):
-    query: str
-
-# Mount static files
-static_dir = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
-@app.get("/")
-async def read_root():
-    """Serve the main HTML page"""
-    html_file = static_dir / "index.html"
-    return FileResponse(html_file)
-
-@app.get("/api/books/current")
-@limiter.limit("30/minute")
-async def get_current_book(request: Request):
-    """Get the current book being read"""
-    book = tracker.get_current_book()
-    if book:
-        return JSONResponse(content=book)
-    return JSONResponse(content={"message": "No current book"}, status_code=404)
-
-@app.get("/api/books")
-@limiter.limit("30/minute")
-async def get_all_books(request: Request):
-    """Get all books in the library"""
-    books = tracker.get_all_books()
-    return JSONResponse(content={"books": books})
-
-@app.post("/api/books/next")
-@limiter.limit("5/minute")
-async def next_book(request: Request):
-    """Move to the next book"""
-    success = tracker.next_book()
-    if success:
-        book = tracker.get_current_book()
-        return JSONResponse(content=book)
-    return JSONResponse(content={"message": "No more books available"}, status_code=404)
-
-@app.post("/api/books/previous")
-@limiter.limit("5/minute")
-async def previous_book(request: Request):
-    """Move to the previous book"""
-    success = tracker.previous_book()
-    if success:
-        book = tracker.get_current_book()
-        return JSONResponse(content=book)
-    return JSONResponse(content={"message": "No previous book available"}, status_code=404)
-
-@app.post("/api/books/{book_id}/rating")
-@limiter.limit("10/minute")
-async def rate_book(book_id: int, rating: BookRating, request: Request):
-    """Rate a book"""
-    if rating.rating < 1 or rating.rating > 5:
-        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
+# FMA PATCH 1: HTTPS Enforcement & Security Headers (CRITICAL)
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    """Force HTTPS and add security headers."""
+    # Force HTTPS redirect (except localhost)
+    if not request.url.scheme == "https" and request.url.hostname not in ["localhost", "127.0.0.1"]:
+        url = request.url.replace(scheme="https")
+        return RedirectResponse(url, status_code=301)
     
-    success = tracker.rate_book(book_id, rating.rating)
-    if success:
-        return JSONResponse(content={"message": "Rating updated successfully"})
-    raise HTTPException(status_code=404, detail="Book not found")
-
-@app.post("/api/books/{book_id}/status")
-@limiter.limit("10/minute")
-async def update_status(book_id: int, status: BookStatus, request: Request):
-    """Update book reading status"""
-    valid_statuses = ["unread", "reading", "completed"]
-    if status.status not in valid_statuses:
-        raise HTTPException(status_code=400, detail=f"Status must be one of {valid_statuses}")
+    response = await call_next(request)
     
-    success = tracker.update_status(book_id, status.status)
-    if success:
-        return JSONResponse(content={"message": "Status updated successfully"})
-    raise HTTPException(status_code=404, detail="Book not found")
+    # Add security headers
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(), payment=(self)"
+    
+    # Content Security Policy
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://pay.google.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' https://cdnjs.cloudflare.com; "
+        "connect-src 'self' wss: https://pay.google.com; "
+        "frame-src https://pay.google.com; "
+        "object-src 'none'; "
+        "base-uri 'self';"
+    )
+    
+    return response
 
-@app.get("/api/stats")
-async def get_stats():
-    """Get reading statistics"""
-    stats = tracker.get_stats()
-    return JSONResponse(content=stats)
+# FMA PATCH 4: Configure CORS with secure whitelist
+allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000"
+).split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["*"],
+)
+
+# Setup templates and static files
+templates = Jinja2Templates(directory="pulse_ui/templates")
+app.mount("/static", StaticFiles(directory="pulse_ui/static"), name="static")
+
+# Initialize Pulse Engine
+pulse_engine = PulseEngine()
+
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                pass
+
+manager = ConnectionManager()
+
+# Routes
+@app.get("/", response_class=HTMLResponse)
+@limiter.limit("100/minute")
+async def home(request: Request):
+    """Render the main dashboard."""
+    return templates.TemplateResponse("index.html", {"request": request})
+
+@app.get("/health", response_model=HealthResponse)
+@limiter.limit("200/minute")
+async def health_check(request: Request):
+    """Check system health status."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0"
+    }
+
+@app.post("/api/tasks", response_model=TaskResponse)
+@limiter.limit("20/minute")
+async def create_task(task: TaskCreate, request: Request):
+    """Create a new task."""
+    try:
+        created_task = await pulse_engine.create_task(task)
+        await manager.broadcast({
+            "type": "task_created",
+            "data": created_task
+        })
+        return created_task
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tasks", response_model=TaskListResponse)
+@limiter.limit("60/minute")
+async def get_tasks(
+    request: Request,
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    category: Optional[str] = None
+):
+    """Get all tasks with optional filters."""
+    try:
+        tasks = await pulse_engine.get_tasks(
+            status=status,
+            priority=priority,
+            category=category
+        )
+        return {"tasks": tasks, "total": len(tasks)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/tasks/{task_id}", response_model=TaskResponse)
+@limiter.limit("60/minute")
+async def get_task(task_id: str, request: Request):
+    """Get a specific task by ID."""
+    try:
+        task = await pulse_engine.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return task
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/tasks/{task_id}", response_model=TaskResponse)
+@limiter.limit("30/minute")
+async def update_task(task_id: str, task_update: TaskUpdate, request: Request):
+    """Update an existing task."""
+    try:
+        updated_task = await pulse_engine.update_task(task_id, task_update)
+        if not updated_task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        await manager.broadcast({
+            "type": "task_updated",
+            "data": updated_task
+        })
+        return updated_task
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/tasks/{task_id}")
+@limiter.limit("20/minute")
+async def delete_task(task_id: str, request: Request):
+    """Delete a task."""
+    try:
+        success = await pulse_engine.delete_task(task_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Task not found")
+        await manager.broadcast({
+            "type": "task_deleted",
+            "data": {"task_id": task_id}
+        })
+        return {"message": "Task deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics", response_model=AnalyticsResponse)
+@limiter.limit("30/minute")
+async def get_analytics(request: Request):
+    """Get task analytics and insights."""
+    try:
+        analytics = await pulse_engine.get_analytics()
+        return analytics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/notifications", response_model=List[NotificationResponse])
+@limiter.limit("60/minute")
+async def get_notifications(request: Request):
+    """Get recent notifications."""
+    try:
+        notifications = await pulse_engine.get_notifications()
+        return notifications
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates."""
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Echo back or process the message
+            await websocket.send_text(f"Message received: {data}")
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
+# Startup and shutdown events
+@app.on_event("startup")
+async def startup_event():
+    """Initialize resources on startup."""
+    await pulse_engine.initialize()
+    print("🚀 Pulse Task Manager started successfully!")
+    print(f"📊 Rate limiting: 200 requests/hour, 50 requests/minute per IP")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup resources on shutdown."""
+    await pulse_engine.cleanup()
+    print("👋 Pulse Task Manager shutdown complete!")
 
 if __name__ == "__main__":
     import uvicorn
