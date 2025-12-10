@@ -1,145 +1,115 @@
-import os
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
+from typing import Optional, List
+import os
+import sys
 from pathlib import Path
-import json
-from typing import Optional
-import logging
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Add parent directory to path to import book_tracker
+sys.path.append(str(Path(__file__).parent.parent))
+from book_tracker import BookTracker
 
-app = FastAPI(title="Pulse UI")
+app = FastAPI()
 
-# Serve static files (CSS, JS, images, etc.)
-static_path = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address, default_limits=["100/hour", "20/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Data storage
-books_data = []
-current_book_index = 0
+# Initialize book tracker
+tracker = BookTracker()
 
-def load_books():
-    """Load books from JSON file"""
-    global books_data
-    json_path = Path(__file__).parent / "books.json"
-    try:
-        with open(json_path, 'r') as f:
-            books_data = json.load(f)
-            logger.info(f"Loaded {len(books_data)} books from JSON")
-    except FileNotFoundError:
-        logger.error(f"books.json not found at {json_path}")
-        books_data = []
-    except json.JSONDecodeError as e:
-        logger.error(f"Error parsing books.json: {e}")
-        books_data = []
+# Pydantic models
+class BookRating(BaseModel):
+    rating: int
 
-def save_books():
-    """Save books to JSON file"""
-    json_path = Path(__file__).parent / "books.json"
-    try:
-        with open(json_path, 'w') as f:
-            json.dump(books_data, f, indent=2)
-        logger.info(f"Saved {len(books_data)} books to JSON")
-    except Exception as e:
-        logger.error(f"Error saving books.json: {e}")
-        raise
+class BookStatus(BaseModel):
+    status: str
 
-@app.on_event("startup")
-async def startup_event():
-    """Load books on startup"""
-    load_books()
+class BookSearch(BaseModel):
+    query: str
+
+# Mount static files
+static_dir = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 @app.get("/")
 async def read_root():
     """Serve the main HTML page"""
-    html_path = Path(__file__).parent / "templates" / "index.html"
-    return FileResponse(html_path)
-
-# CORS middleware configuration with secure whitelist
-allowed_origins = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000"
-).split(",")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["*"],
-)
-
-@app.get("/api/books")
-async def get_books():
-    """Get all books"""
-    return {"books": books_data}
+    html_file = static_dir / "index.html"
+    return FileResponse(html_file)
 
 @app.get("/api/books/current")
-async def get_current_book():
-    """Get the current book being displayed"""
-    global current_book_index
-    if not books_data:
-        raise HTTPException(status_code=404, detail="No books available")
-    if current_book_index >= len(books_data):
-        current_book_index = 0
-    return books_data[current_book_index]
+@limiter.limit("30/minute")
+async def get_current_book(request: Request):
+    """Get the current book being read"""
+    book = tracker.get_current_book()
+    if book:
+        return JSONResponse(content=book)
+    return JSONResponse(content={"message": "No current book"}, status_code=404)
+
+@app.get("/api/books")
+@limiter.limit("30/minute")
+async def get_all_books(request: Request):
+    """Get all books in the library"""
+    books = tracker.get_all_books()
+    return JSONResponse(content={"books": books})
 
 @app.post("/api/books/next")
-async def next_book():
+@limiter.limit("5/minute")
+async def next_book(request: Request):
     """Move to the next book"""
-    global current_book_index
-    if not books_data:
-        raise HTTPException(status_code=404, detail="No books available")
-    current_book_index = (current_book_index + 1) % len(books_data)
-    return books_data[current_book_index]
+    success = tracker.next_book()
+    if success:
+        book = tracker.get_current_book()
+        return JSONResponse(content=book)
+    return JSONResponse(content={"message": "No more books available"}, status_code=404)
 
 @app.post("/api/books/previous")
-async def previous_book():
+@limiter.limit("5/minute")
+async def previous_book(request: Request):
     """Move to the previous book"""
-    global current_book_index
-    if not books_data:
-        raise HTTPException(status_code=404, detail="No books available")
-    current_book_index = (current_book_index - 1) % len(books_data)
-    return books_data[current_book_index]
+    success = tracker.previous_book()
+    if success:
+        book = tracker.get_current_book()
+        return JSONResponse(content=book)
+    return JSONResponse(content={"message": "No previous book available"}, status_code=404)
 
 @app.post("/api/books/{book_id}/rating")
-async def update_rating(book_id: str, request: Request):
-    """Update book rating"""
-    body = await request.json()
-    rating = body.get("rating")
+@limiter.limit("10/minute")
+async def rate_book(book_id: int, rating: BookRating, request: Request):
+    """Rate a book"""
+    if rating.rating < 1 or rating.rating > 5:
+        raise HTTPException(status_code=400, detail="Rating must be between 1 and 5")
     
-    if rating is None or not (0 <= rating <= 5):
-        raise HTTPException(status_code=400, detail="Rating must be between 0 and 5")
-    
-    for book in books_data:
-        if book.get("id") == book_id:
-            book["rating"] = rating
-            save_books()
-            return {"status": "success", "book": book}
-    
+    success = tracker.rate_book(book_id, rating.rating)
+    if success:
+        return JSONResponse(content={"message": "Rating updated successfully"})
     raise HTTPException(status_code=404, detail="Book not found")
 
 @app.post("/api/books/{book_id}/status")
-async def update_status(book_id: str, request: Request):
+@limiter.limit("10/minute")
+async def update_status(book_id: int, status: BookStatus, request: Request):
     """Update book reading status"""
-    body = await request.json()
-    status = body.get("status")
-    
-    valid_statuses = ["not_started", "reading", "completed"]
-    if status not in valid_statuses:
+    valid_statuses = ["unread", "reading", "completed"]
+    if status.status not in valid_statuses:
         raise HTTPException(status_code=400, detail=f"Status must be one of {valid_statuses}")
     
-    for book in books_data:
-        if book.get("id") == book_id:
-            book["status"] = status
-            save_books()
-            return {"status": "success", "book": book}
-    
+    success = tracker.update_status(book_id, status.status)
+    if success:
+        return JSONResponse(content={"message": "Status updated successfully"})
     raise HTTPException(status_code=404, detail="Book not found")
+
+@app.get("/api/stats")
+async def get_stats():
+    """Get reading statistics"""
+    stats = tracker.get_stats()
+    return JSONResponse(content=stats)
 
 if __name__ == "__main__":
     import uvicorn
