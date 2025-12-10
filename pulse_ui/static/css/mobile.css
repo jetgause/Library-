@@ -1,0 +1,882 @@
+/**
+ * PULSE Trading Platform - Mobile Optimized CSS
+ * Created: 2025-12-10
+ * 
+ * Features:
+ * - Touch-optimized targets (minimum 44x44px)
+ * - Bottom navigation for mobile
+ * - Swipe gesture support
+ * - iOS safe area handling
+ * - Responsive layouts for all mobile devices
+ */
+
+/* ============================================
+   ROOT VARIABLES & MOBILE-SPECIFIC SETTINGS
+   ============================================ */
+
+:root {
+    /* Touch Target Sizes */
+    --touch-target-min: 44px;
+    --touch-target-comfortable: 48px;
+    --touch-target-large: 56px;
+    
+    /* iOS Safe Areas */
+    --safe-area-inset-top: env(safe-area-inset-top);
+    --safe-area-inset-right: env(safe-area-inset-right);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom);
+    --safe-area-inset-left: env(safe-area-inset-left);
+    
+    /* Mobile Spacing */
+    --mobile-padding: 16px;
+    --mobile-margin: 12px;
+    --bottom-nav-height: 64px;
+    
+    /* Swipe Thresholds */
+    --swipe-threshold: 50px;
+    --swipe-velocity: 0.3;
+    
+    /* Z-Index Layers */
+    --z-bottom-nav: 1000;
+    --z-modal: 1100;
+    --z-toast: 1200;
+}
+
+/* ============================================
+   BASE MOBILE OPTIMIZATIONS
+   ============================================ */
+
+@media (max-width: 768px) {
+    * {
+        -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        -webkit-touch-callout: none;
+    }
+    
+    html {
+        /* Prevent zoom on input focus */
+        font-size: 16px;
+        -webkit-text-size-adjust: 100%;
+        touch-action: manipulation;
+    }
+    
+    body {
+        padding-bottom: calc(var(--bottom-nav-height) + var(--safe-area-inset-bottom));
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Smooth scrolling for better mobile experience */
+    html, body {
+        scroll-behavior: smooth;
+    }
+}
+
+/* ============================================
+   TOUCH TARGET OPTIMIZATION
+   ============================================ */
+
+/* Ensure all interactive elements meet minimum touch target size */
+.btn,
+button,
+a,
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+.touch-target {
+    min-height: var(--touch-target-min);
+    min-width: var(--touch-target-min);
+    padding: 12px 16px;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Comfortable touch targets for primary actions */
+.btn-primary,
+.btn-trade,
+.btn-action {
+    min-height: var(--touch-target-comfortable);
+    min-width: var(--touch-target-comfortable);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* Large touch targets for critical actions */
+.btn-critical,
+.btn-trade-execute,
+.btn-emergency {
+    min-height: var(--touch-target-large);
+    min-width: 100%;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 8px 0;
+}
+
+/* Increase tap area without visible size change */
+.tap-area-extended::after {
+    content: '';
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    bottom: -8px;
+    left: -8px;
+}
+
+/* ============================================
+   BOTTOM NAVIGATION
+   ============================================ */
+
+.mobile-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--bottom-nav-height);
+    background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+    z-index: var(--z-bottom-nav);
+    padding-bottom: var(--safe-area-inset-bottom);
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobile-bottom-nav {
+        display: flex;
+    }
+}
+
+.mobile-bottom-nav__container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    width: 100%;
+    padding: 8px 8px 0 8px;
+}
+
+.mobile-bottom-nav__item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--touch-target-min);
+    color: rgba(255, 255, 255, 0.6);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.mobile-bottom-nav__item:active {
+    transform: scale(0.95);
+}
+
+.mobile-bottom-nav__item--active {
+    color: #3b82f6;
+}
+
+.mobile-bottom-nav__item--active::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 32px;
+    height: 3px;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    border-radius: 2px;
+}
+
+.mobile-bottom-nav__icon {
+    font-size: 24px;
+    margin-bottom: 4px;
+    transition: transform 0.2s ease;
+}
+
+.mobile-bottom-nav__item--active .mobile-bottom-nav__icon {
+    transform: scale(1.1);
+}
+
+.mobile-bottom-nav__label {
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.mobile-bottom-nav__badge {
+    position: absolute;
+    top: 4px;
+    right: calc(50% - 20px);
+    background: #ef4444;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   SWIPE GESTURE SUPPORT
+   ============================================ */
+
+.swipeable {
+    touch-action: pan-y;
+    position: relative;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.swipeable--swiping {
+    transition: none;
+}
+
+.swipeable--left {
+    transform: translateX(-100%);
+}
+
+.swipeable--right {
+    transform: translateX(100%);
+}
+
+/* Swipe actions revealed on left swipe */
+.swipe-actions {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    transform: translateX(100%);
+}
+
+.swipe-action {
+    height: 100%;
+    min-width: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.swipe-action--delete {
+    background: #ef4444;
+}
+
+.swipe-action--archive {
+    background: #f59e0b;
+}
+
+.swipe-action--edit {
+    background: #3b82f6;
+}
+
+.swipe-action:active {
+    filter: brightness(0.9);
+}
+
+/* Pull to refresh */
+.pull-to-refresh {
+    position: relative;
+    overflow: hidden;
+}
+
+.pull-to-refresh__indicator {
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: top 0.3s ease;
+}
+
+.pull-to-refresh--pulling .pull-to-refresh__indicator {
+    top: 20px;
+}
+
+.pull-to-refresh__spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid rgba(59, 130, 246, 0.2);
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   iOS SAFE AREA HANDLING
+   ============================================ */
+
+/* Top safe area (notch) */
+.ios-safe-top {
+    padding-top: var(--safe-area-inset-top);
+}
+
+.mobile-header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding-top: var(--safe-area-inset-top);
+    z-index: 999;
+}
+
+/* Bottom safe area (home indicator) */
+.ios-safe-bottom {
+    padding-bottom: var(--safe-area-inset-bottom);
+}
+
+/* Side safe areas (rounded corners) */
+.ios-safe-sides {
+    padding-left: var(--safe-area-inset-left);
+    padding-right: var(--safe-area-inset-right);
+}
+
+/* Full safe area coverage */
+.ios-safe-all {
+    padding-top: var(--safe-area-inset-top);
+    padding-right: var(--safe-area-inset-right);
+    padding-bottom: var(--safe-area-inset-bottom);
+    padding-left: var(--safe-area-inset-left);
+}
+
+/* Modal with safe areas */
+.mobile-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: var(--z-modal);
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: var(--safe-area-inset-bottom);
+}
+
+.mobile-modal__content {
+    background: #1e293b;
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 24px;
+    padding-bottom: calc(24px + var(--safe-area-inset-bottom));
+}
+
+/* ============================================
+   RESPONSIVE MOBILE LAYOUTS
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Container adjustments */
+    .container {
+        padding-left: var(--mobile-padding);
+        padding-right: var(--mobile-padding);
+        max-width: 100%;
+    }
+    
+    /* Full-width cards on mobile */
+    .card,
+    .trade-panel,
+    .chart-container {
+        border-radius: 12px;
+        margin-bottom: var(--mobile-margin);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+    
+    /* Stack layouts vertically */
+    .row,
+    .flex-row {
+        flex-direction: column;
+    }
+    
+    /* Full-width form inputs */
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    select,
+    textarea {
+        width: 100%;
+        font-size: 16px; /* Prevent zoom on focus */
+        padding: 12px 16px;
+        border-radius: 8px;
+    }
+    
+    /* Mobile typography */
+    h1 { font-size: 28px; }
+    h2 { font-size: 24px; }
+    h3 { font-size: 20px; }
+    h4 { font-size: 18px; }
+    
+    /* Hidden on mobile */
+    .hide-mobile {
+        display: none !important;
+    }
+    
+    /* Visible only on mobile */
+    .show-mobile {
+        display: block !important;
+    }
+}
+
+/* ============================================
+   MOBILE TRADING INTERFACE
+   ============================================ */
+
+@media (max-width: 768px) {
+    .trade-panel {
+        position: fixed;
+        bottom: var(--bottom-nav-height);
+        left: 0;
+        right: 0;
+        background: #1e293b;
+        border-radius: 20px 20px 0 0;
+        padding: 20px;
+        padding-bottom: calc(20px + var(--safe-area-inset-bottom));
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+        z-index: 999;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+    
+    .trade-panel--open {
+        transform: translateY(0);
+    }
+    
+    .trade-panel__handle {
+        width: 40px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+        margin: 0 auto 16px;
+        cursor: grab;
+    }
+    
+    .trade-panel__handle:active {
+        cursor: grabbing;
+    }
+    
+    /* Buy/Sell buttons */
+    .trade-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 16px;
+    }
+    
+    .btn-buy {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        border: none;
+        font-size: 18px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .btn-sell {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+        border: none;
+        font-size: 18px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* Chart view */
+    .mobile-chart {
+        width: 100%;
+        height: 300px;
+        margin-bottom: 16px;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #0f172a;
+    }
+    
+    /* Price display */
+    .mobile-price-display {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        margin-bottom: 16px;
+    }
+    
+    .mobile-price-display__symbol {
+        font-size: 18px;
+        font-weight: 700;
+        color: white;
+    }
+    
+    .mobile-price-display__price {
+        font-size: 24px;
+        font-weight: 700;
+        color: #3b82f6;
+    }
+    
+    .mobile-price-display__change {
+        font-size: 14px;
+        font-weight: 600;
+    }
+    
+    .mobile-price-display__change--positive {
+        color: #10b981;
+    }
+    
+    .mobile-price-display__change--negative {
+        color: #ef4444;
+    }
+}
+
+/* ============================================
+   MOBILE WATCHLIST
+   ============================================ */
+
+@media (max-width: 768px) {
+    .watchlist-item {
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: var(--touch-target-comfortable);
+    }
+    
+    .watchlist-item__symbol {
+        font-size: 16px;
+        font-weight: 700;
+        color: white;
+        flex: 1;
+    }
+    
+    .watchlist-item__price {
+        font-size: 18px;
+        font-weight: 600;
+        color: #3b82f6;
+        margin: 0 16px;
+    }
+    
+    .watchlist-item__change {
+        font-size: 14px;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+    
+    .watchlist-item__change--positive {
+        color: #10b981;
+        background: rgba(16, 185, 129, 0.1);
+    }
+    
+    .watchlist-item__change--negative {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+    }
+}
+
+/* ============================================
+   MOBILE PORTFOLIO VIEW
+   ============================================ */
+
+@media (max-width: 768px) {
+    .portfolio-summary {
+        background: linear-gradient(135deg, #1e293b, #334155);
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+    
+    .portfolio-summary__value {
+        font-size: 36px;
+        font-weight: 700;
+        color: white;
+        margin-bottom: 8px;
+    }
+    
+    .portfolio-summary__change {
+        font-size: 18px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .position-card {
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+    }
+    
+    .position-card__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    
+    .position-card__symbol {
+        font-size: 18px;
+        font-weight: 700;
+        color: white;
+    }
+    
+    .position-card__value {
+        font-size: 20px;
+        font-weight: 600;
+        color: #3b82f6;
+    }
+    
+    .position-card__details {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 12px;
+    }
+    
+    .position-card__detail {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .position-card__detail-label {
+        font-size: 12px;
+        color: rgba(255, 255, 255, 0.6);
+        margin-bottom: 4px;
+    }
+    
+    .position-card__detail-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: white;
+    }
+}
+
+/* ============================================
+   MOBILE NOTIFICATIONS & TOASTS
+   ============================================ */
+
+.mobile-toast {
+    position: fixed;
+    top: calc(20px + var(--safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: rgba(30, 41, 59, 0.95);
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    padding: 16px 20px;
+    min-width: 280px;
+    max-width: calc(100% - 40px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    z-index: var(--z-toast);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-toast--visible {
+    transform: translateX(-50%) translateY(0);
+}
+
+.mobile-toast--success {
+    border-left: 4px solid #10b981;
+}
+
+.mobile-toast--error {
+    border-left: 4px solid #ef4444;
+}
+
+.mobile-toast--warning {
+    border-left: 4px solid #f59e0b;
+}
+
+.mobile-toast--info {
+    border-left: 4px solid #3b82f6;
+}
+
+.mobile-toast__message {
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+/* ============================================
+   MOBILE SEARCH
+   ============================================ */
+
+@media (max-width: 768px) {
+    .mobile-search {
+        position: sticky;
+        top: var(--safe-area-inset-top);
+        background: #1e293b;
+        padding: 12px var(--mobile-padding);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 998;
+    }
+    
+    .mobile-search__input {
+        width: 100%;
+        height: var(--touch-target-min);
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 22px;
+        padding: 0 40px 0 16px;
+        color: white;
+        font-size: 16px;
+    }
+    
+    .mobile-search__input::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+    }
+    
+    .mobile-search__icon {
+        position: absolute;
+        right: 28px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 20px;
+    }
+}
+
+/* ============================================
+   LANDSCAPE ORIENTATION
+   ============================================ */
+
+@media (max-width: 768px) and (orientation: landscape) {
+    .mobile-bottom-nav {
+        display: none;
+    }
+    
+    body {
+        padding-bottom: 0;
+    }
+    
+    .mobile-chart {
+        height: calc(100vh - 120px);
+    }
+    
+    .trade-panel {
+        max-height: 100vh;
+    }
+}
+
+/* ============================================
+   ACCESSIBILITY ENHANCEMENTS
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Focus visible for keyboard navigation */
+    *:focus-visible {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+    }
+    
+    /* Reduced motion support */
+    @media (prefers-reduced-motion: reduce) {
+        * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
+    
+    /* High contrast mode adjustments */
+    @media (prefers-contrast: high) {
+        .mobile-bottom-nav,
+        .card,
+        .trade-panel {
+            border: 2px solid white;
+        }
+    }
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+
+@media (max-width: 768px) {
+    .mobile-center {
+        text-align: center;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .mobile-full-width {
+        width: 100% !important;
+    }
+    
+    .mobile-no-padding {
+        padding: 0 !important;
+    }
+    
+    .mobile-no-margin {
+        margin: 0 !important;
+    }
+    
+    .mobile-hide {
+        display: none !important;
+    }
+    
+    .mobile-show {
+        display: block !important;
+    }
+    
+    .mobile-flex {
+        display: flex !important;
+    }
+    
+    .mobile-grid {
+        display: grid !important;
+    }
+}
+
+/* ============================================
+   PERFORMANCE OPTIMIZATIONS
+   ============================================ */
+
+@media (max-width: 768px) {
+    /* Use transform and opacity for animations (GPU accelerated) */
+    .animated {
+        will-change: transform, opacity;
+    }
+    
+    /* Optimize scrolling performance */
+    .scroll-container {
+        -webkit-overflow-scrolling: touch;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+    }
+    
+    /* Reduce paint areas */
+    .isolated {
+        contain: layout style paint;
+    }
+}
+
+/* End of mobile.css */
