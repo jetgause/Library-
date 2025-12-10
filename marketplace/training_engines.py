@@ -173,9 +173,12 @@ class DeepLearningEngine(BaseTrainingEngine):
                 loss_improvement
             )
             
-            # Calculate overall improvement
-            before_avg = sum(tool.performance_metrics.values()) / len(tool.performance_metrics) if tool.performance_metrics else 0
-            after_avg = sum(new_metrics.values()) / len(new_metrics) if new_metrics else 0
+            # Calculate overall improvement safely
+            before_values = [v for v in tool.performance_metrics.values() if v != 0]
+            after_values = [v for v in new_metrics.values() if v != 0]
+            
+            before_avg = sum(before_values) / len(before_values) if before_values else 0
+            after_avg = sum(after_values) / len(after_values) if after_values else 0
             
             if before_avg > 0:
                 result.improvement_percentage = ((after_avg - before_avg) / before_avg) * 100

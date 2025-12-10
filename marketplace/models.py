@@ -112,6 +112,22 @@ class ToolListing:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "ToolListing":
         """Create a ToolListing from dictionary data."""
+        # Parse datetime fields safely
+        created_at = datetime.utcnow()
+        updated_at = datetime.utcnow()
+        
+        if "created_at" in data:
+            try:
+                created_at = datetime.fromisoformat(data["created_at"])
+            except ValueError:
+                pass  # Use default if parsing fails
+        
+        if "updated_at" in data:
+            try:
+                updated_at = datetime.fromisoformat(data["updated_at"])
+            except ValueError:
+                pass  # Use default if parsing fails
+        
         return cls(
             tool_id=data.get("tool_id", str(uuid.uuid4())),
             creator_id=data.get("creator_id", ""),
@@ -126,8 +142,8 @@ class ToolListing:
             performance_metrics=data.get("performance_metrics", {}),
             optimization_history=data.get("optimization_history", []),
             is_active=data.get("is_active", True),
-            created_at=datetime.fromisoformat(data["created_at"]) if "created_at" in data else datetime.utcnow(),
-            updated_at=datetime.fromisoformat(data["updated_at"]) if "updated_at" in data else datetime.utcnow(),
+            created_at=created_at,
+            updated_at=updated_at,
         )
 
 

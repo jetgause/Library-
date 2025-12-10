@@ -19,7 +19,10 @@ from typing import Any, Dict, List, Optional
 import uuid
 
 from .models import (
+    OptimizationRecord,
+    OptimizationScope,
     OptimizationStandard,
+    OptimizationStatus,
     RentalSubscription,
     SubscriptionTier,
     ToolListing,
@@ -556,8 +559,6 @@ class MarketplaceAPI:
             # If training successful, evaluate against standards
             if result.success:
                 # Create a temporary optimization record for evaluation
-                from .models import OptimizationRecord, OptimizationScope, OptimizationStatus
-                
                 temp_record = OptimizationRecord(
                     tool_id=tool_id,
                     before_metrics=tool.performance_metrics.copy(),

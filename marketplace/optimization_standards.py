@@ -300,10 +300,12 @@ class OptimizationStandardsEngine:
             
             after_val = after[metric]
             
-            # Determine if this is a regression
+            # Determine if this is a regression based on metric type
+            # For time-based metrics (lower is better), regression = increase
+            # For rate metrics (higher is better), regression = decrease
             if metric in ["avg_execution_time", "latency", "error_rate"]:
-                # Higher is worse
-                if before_val > 0:
+                # Lower is better - regression when after > before
+                if after_val > before_val and before_val > 0:
                     regression_pct = ((after_val - before_val) / before_val) * 100
                     if regression_pct > tolerance:
                         regressions.append({
@@ -311,8 +313,8 @@ class OptimizationStandardsEngine:
                             "regression_percentage": regression_pct
                         })
             else:
-                # Lower is worse
-                if before_val > 0:
+                # Higher is better - regression when after < before
+                if after_val < before_val and before_val > 0:
                     regression_pct = ((before_val - after_val) / before_val) * 100
                     if regression_pct > tolerance:
                         regressions.append({

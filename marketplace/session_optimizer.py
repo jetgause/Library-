@@ -193,6 +193,9 @@ class SessionOptimizer:
             
             # Store record
             self._optimizations[record.record_id] = record
+            # Ensure session_optimizations key exists
+            if session_id not in self._session_optimizations:
+                self._session_optimizations[session_id] = []
             self._session_optimizations[session_id].append(record.record_id)
         
         # Perform optimization (outside lock to avoid blocking)
