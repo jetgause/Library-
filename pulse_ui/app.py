@@ -1,266 +1,241 @@
-"""
-PULSE UI - Main Application
-===========================
-
-FastAPI web application for PULSE Trading Platform UI.
-Provides web interface for tool management, monitoring, and analytics.
-
-Author: jetgause
-Created: 2025-12-10
-"""
-
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from pathlib import Path
-import uvicorn
-from datetime import datetime
-from typing import List, Dict, Any
+import os
 import json
 import asyncio
+from pathlib import Path
+from datetime import datetime
+from typing import Optional, List, Dict, Any
 
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
+
+# Import core components
+from pulse_core.pulse_engine import PulseEngine
+from pulse_core.models import (
+    TaskCreate,
+    TaskUpdate,
+    TaskResponse,
+    TaskListResponse,
+    AnalyticsResponse,
+    NotificationResponse,
+    HealthResponse
+)
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="PULSE Trading Platform",
-    description="Web UI for PULSE tool management and monitoring",
+    title="Pulse Task Manager",
+    description="AI-powered intelligent task management system",
     version="1.0.0"
 )
 
-# Setup paths
-BASE_DIR = Path(__file__).resolve().parent
-STATIC_DIR = BASE_DIR / "static"
-TEMPLATES_DIR = BASE_DIR / "templates"
+# FMA PATCH 1: HTTPS Enforcement & Security Headers (CRITICAL)
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    """Force HTTPS and add security headers."""
+    # Force HTTPS redirect (except localhost)
+    if not request.url.scheme == "https" and request.url.hostname not in ["localhost", "127.0.0.1"]:
+        url = request.url.replace(scheme="https")
+        return RedirectResponse(url, status_code=301)
+    
+    response = await call_next(request)
+    
+    # Add security headers
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=(), payment=(self)"
+    
+    # Content Security Policy
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://pay.google.com; "
+        "style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' https://cdnjs.cloudflare.com; "
+        "connect-src 'self' wss: https://pay.google.com; "
+        "frame-src https://pay.google.com; "
+        "object-src 'none'; "
+        "base-uri 'self';"
+    )
+    
+    return response
 
-# Mount static files
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Setup templates
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+# Setup templates and static files
+templates = Jinja2Templates(directory="pulse_ui/templates")
+app.mount("/static", StaticFiles(directory="pulse_ui/static"), name="static")
 
+# Initialize Pulse Engine
+pulse_engine = PulseEngine()
 
-# In-memory data store (replace with actual database in production)
-class DataStore:
+# WebSocket connection manager
+class ConnectionManager:
     def __init__(self):
-        self.tools = {}
-        self.metrics = {
-            'cpu_usage': 45.2,
-            'memory_usage': 62.1,
-            'active_tools': 42,
-            'requests_per_second': 275,
-            'avg_response_time': 850,
-            'error_rate': 2.1
-        }
-        self.activity_log = []
-        self.connected_clients = []
-    
-    def add_tool(self, tool_data: Dict[str, Any]) -> str:
-        tool_id = f"tool_{len(self.tools) + 1}"
-        self.tools[tool_id] = {
-            'id': tool_id,
-            **tool_data,
-            'created_at': datetime.utcnow().isoformat()
-        }
-        self.log_activity('tool_created', {'tool_id': tool_id, 'name': tool_data.get('name')})
-        return tool_id
-    
-    def get_tool(self, tool_id: str) -> Dict[str, Any]:
-        return self.tools.get(tool_id)
-    
-    def list_tools(self, category: str = None) -> List[Dict[str, Any]]:
-        tools = list(self.tools.values())
-        if category:
-            tools = [t for t in tools if t.get('category') == category]
-        return tools
-    
-    def update_metrics(self, new_metrics: Dict[str, Any]):
-        self.metrics.update(new_metrics)
-    
-    def log_activity(self, activity_type: str, data: Dict[str, Any]):
-        self.activity_log.append({
-            'timestamp': datetime.utcnow().isoformat(),
-            'type': activity_type,
-            'data': data
-        })
-        # Keep only last 100 entries
-        if len(self.activity_log) > 100:
-            self.activity_log = self.activity_log[-100:]
+        self.active_connections: List[WebSocket] = []
 
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
 
-# Global data store
-store = DataStore()
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
 
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                pass
 
-# Initialize with sample tools
-def init_sample_data():
-    """Initialize with sample tools for demonstration."""
-    sample_tools = [
-        {'name': 'Data Cleaner', 'category': 'Data Processing', 'tier': 1, 'status': 'active'},
-        {'name': 'ML Predictor', 'category': 'Machine Learning', 'tier': 2, 'status': 'active'},
-        {'name': 'API Monitor', 'category': 'Monitoring', 'tier': 1, 'status': 'active'},
-        {'name': 'Report Generator', 'category': 'Analytics', 'tier': 3, 'status': 'active'},
-    ]
-    
-    for tool in sample_tools:
-        store.add_tool(tool)
-
+manager = ConnectionManager()
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    """Main dashboard page."""
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "page_title": "Dashboard",
-        "metrics": store.metrics,
-        "tool_count": len(store.tools)
-    })
+async def home(request: Request):
+    """Render the main dashboard."""
+    return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/health", response_model=HealthResponse)
+async def health_check():
+    """Check system health status."""
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0"
+    }
 
-@app.get("/tools", response_class=HTMLResponse)
-async def tools_page(request: Request):
-    """Tool browser page."""
-    return templates.TemplateResponse("tools.html", {
-        "request": request,
-        "page_title": "Tools",
-        "tools": store.list_tools()
-    })
+@app.post("/api/tasks", response_model=TaskResponse)
+async def create_task(task: TaskCreate):
+    """Create a new task."""
+    try:
+        created_task = await pulse_engine.create_task(task)
+        await manager.broadcast({
+            "type": "task_created",
+            "data": created_task
+        })
+        return created_task
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/tasks", response_model=TaskListResponse)
+async def get_tasks(
+    status: Optional[str] = None,
+    priority: Optional[str] = None,
+    category: Optional[str] = None
+):
+    """Get all tasks with optional filters."""
+    try:
+        tasks = await pulse_engine.get_tasks(
+            status=status,
+            priority=priority,
+            category=category
+        )
+        return {"tasks": tasks, "total": len(tasks)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/tools/create", response_class=HTMLResponse)
-async def tool_create_page(request: Request):
-    """Tool creation wizard page."""
-    return templates.TemplateResponse("tool_create.html", {
-        "request": request,
-        "page_title": "Create Tool"
-    })
+@app.get("/api/tasks/{task_id}", response_model=TaskResponse)
+async def get_task(task_id: str):
+    """Get a specific task by ID."""
+    try:
+        task = await pulse_engine.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return task
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.put("/api/tasks/{task_id}", response_model=TaskResponse)
+async def update_task(task_id: str, task_update: TaskUpdate):
+    """Update an existing task."""
+    try:
+        updated_task = await pulse_engine.update_task(task_id, task_update)
+        if not updated_task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        await manager.broadcast({
+            "type": "task_updated",
+            "data": updated_task
+        })
+        return updated_task
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/monitoring", response_class=HTMLResponse)
-async def monitoring_page(request: Request):
-    """Live monitoring page."""
-    return templates.TemplateResponse("monitoring.html", {
-        "request": request,
-        "page_title": "Monitoring",
-        "metrics": store.metrics
-    })
+@app.delete("/api/tasks/{task_id}")
+async def delete_task(task_id: str):
+    """Delete a task."""
+    try:
+        success = await pulse_engine.delete_task(task_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Task not found")
+        await manager.broadcast({
+            "type": "task_deleted",
+            "data": {"task_id": task_id}
+        })
+        return {"message": "Task deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/analytics", response_model=AnalyticsResponse)
+async def get_analytics():
+    """Get task analytics and insights."""
+    try:
+        analytics = await pulse_engine.get_analytics()
+        return analytics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request):
-    """Settings page."""
-    return templates.TemplateResponse("settings.html", {
-        "request": request,
-        "page_title": "Settings"
-    })
+@app.get("/api/notifications", response_model=List[NotificationResponse])
+async def get_notifications():
+    """Get recent notifications."""
+    try:
+        notifications = await pulse_engine.get_notifications()
+        return notifications
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-
-# API Routes
-@app.get("/api/tools")
-async def api_list_tools(category: str = None):
-    """API endpoint to list tools."""
-    return JSONResponse({
-        "status": "success",
-        "tools": store.list_tools(category)
-    })
-
-
-@app.get("/api/tools/{tool_id}")
-async def api_get_tool(tool_id: str):
-    """API endpoint to get a specific tool."""
-    tool = store.get_tool(tool_id)
-    if tool:
-        return JSONResponse({"status": "success", "tool": tool})
-    return JSONResponse({"status": "error", "message": "Tool not found"}, status_code=404)
-
-
-@app.post("/api/tools")
-async def api_create_tool(request: Request):
-    """API endpoint to create a new tool."""
-    data = await request.json()
-    tool_id = store.add_tool(data)
-    return JSONResponse({
-        "status": "success",
-        "tool_id": tool_id,
-        "message": "Tool created successfully"
-    })
-
-
-@app.get("/api/metrics")
-async def api_get_metrics():
-    """API endpoint to get current metrics."""
-    return JSONResponse({
-        "status": "success",
-        "metrics": store.metrics,
-        "timestamp": datetime.utcnow().isoformat()
-    })
-
-
-@app.get("/api/activity")
-async def api_get_activity():
-    """API endpoint to get activity log."""
-    return JSONResponse({
-        "status": "success",
-        "activity": store.activity_log[-20:]  # Last 20 entries
-    })
-
-
-# WebSocket endpoint for real-time updates
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time metric updates."""
-    await websocket.accept()
-    store.connected_clients.append(websocket)
-    
+    """WebSocket endpoint for real-time updates."""
+    await manager.connect(websocket)
     try:
         while True:
-            # Send metrics every 2 seconds
-            await websocket.send_json({
-                "type": "metrics_update",
-                "data": store.metrics,
-                "timestamp": datetime.utcnow().isoformat()
-            })
-            await asyncio.sleep(2)
-    
+            data = await websocket.receive_text()
+            # Echo back or process the message
+            await websocket.send_text(f"Message received: {data}")
     except WebSocketDisconnect:
-        store.connected_clients.remove(websocket)
+        manager.disconnect(websocket)
 
-
+# Startup and shutdown events
 @app.on_event("startup")
 async def startup_event():
-    """Initialize app on startup."""
-    init_sample_data()
-    print("🚀 PULSE UI Server Started")
-    print(f"📊 Dashboard: http://localhost:8000")
-    print(f"🔧 Tools: http://localhost:8000/tools")
-    print(f"📡 Monitoring: http://localhost:8000/monitoring")
-
+    """Initialize resources on startup."""
+    await pulse_engine.initialize()
+    print("🚀 Pulse Task Manager started successfully!")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    """Cleanup on shutdown."""
-    print("👋 PULSE UI Server Shutting Down")
-
-
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    """Health check endpoint."""
-    return JSONResponse({
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
-        "tools_count": len(store.tools),
-        "connected_clients": len(store.connected_clients)
-    })
-
+    """Cleanup resources on shutdown."""
+    await pulse_engine.cleanup()
+    print("👋 Pulse Task Manager shutdown complete!")
 
 if __name__ == "__main__":
-    # Run the application
-    uvicorn.run(
-        "app:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
-    )
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
