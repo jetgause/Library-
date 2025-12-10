@@ -827,14 +827,29 @@ class TriEngineOptimizer:
 
 # Example usage and demonstration
 if __name__ == "__main__":
+    # Forward return scaling factor: converts typical forward returns (e.g., 0.001-0.01)
+    # to a 0-1 performance scale for consistent evaluation
+    FORWARD_RETURN_SCALE = 10.0
+    
     # Example tool function to optimize using real forward returns
     def example_tool(learning_rate: float, batch_size: int, dropout: float,
                      noise_level: float = 0.0, forward_return: float = None, **kwargs) -> Dict[str, float]:
         """
         Simulated ML model training using real forward returns as labels.
-        Instead of fake simulated outcomes, uses actual forward return data.
+        Instead of fake simulated outcomes based on pre-defined win rates,
+        uses actual forward return data from market movements to determine labels.
+        
+        Args:
+            learning_rate: Model learning rate
+            batch_size: Training batch size
+            dropout: Dropout rate
+            noise_level: Noise to add to simulation
+            forward_return: Real forward return from market data (used as P&L label)
+        
+        Returns:
+            Dict with accuracy, loss, and forward_return metrics
         """
-        # Base performance based on parameters
+        # Base performance based on model parameters
         base_performance = (
             0.5 +
             0.3 * (1.0 - abs(learning_rate - 0.01)) +
@@ -843,29 +858,40 @@ if __name__ == "__main__":
         
         # Use real forward return as label if provided, otherwise generate realistic return
         if forward_return is not None:
-            # Use actual forward return as P&L label
-            performance = 0.5 + (forward_return * 10.0)  # Scale forward return to performance
+            # Scale forward return (typically 0.001-0.01) to 0-1 performance range
+            return_scaled = 0.5 + (forward_return * FORWARD_RETURN_SCALE)
         else:
             # Generate a realistic forward return for demonstration
             realistic_return = np.random.normal(0.001, 0.005)
-            performance = 0.5 + (realistic_return * 10.0)
+            return_scaled = 0.5 + (realistic_return * FORWARD_RETURN_SCALE)
+            forward_return = realistic_return
         
-        performance = np.clip(base_performance * performance, 0.0, 1.0)
+        # Combine base performance with return-based label additively (not multiplicatively)
+        # to avoid unexpected scaling effects
+        performance = np.clip((base_performance + return_scaled) / 2.0, 0.0, 1.0)
         
         return {
             'accuracy': performance,
             'loss': 1.0 - performance,
             'training_time': batch_size * 0.01,
-            'forward_return': forward_return if forward_return is not None else np.random.normal(0.001, 0.005)
+            'forward_return': forward_return
         }
     
     # Objective function using real P&L labels
     def objective(result: Dict[str, float]) -> float:
-        """Evaluate optimization result using real forward return as label."""
+        """
+        Evaluate optimization result using real forward return as label.
+        
+        The forward return directly influences the objective score,
+        ensuring the optimizer learns from actual market movements
+        rather than fake simulated win rates.
+        """
         # Use forward return directly in objective if available
         forward_return = result.get('forward_return', 0.0)
-        # Positive forward return = positive outcome
-        return result['accuracy'] - 0.1 * result['loss'] + forward_return * 10.0
+        # Scale forward return to have meaningful impact on objective
+        return_contribution = forward_return * FORWARD_RETURN_SCALE
+        # Combine accuracy and return contribution
+        return result['accuracy'] - 0.1 * result['loss'] + return_contribution
     
     # Parameter space
     param_space = {

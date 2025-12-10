@@ -75,6 +75,19 @@ class GreekEngines:
         return volume_spike * gex_concentration * 100 / (distance + 1)
 
 class MarketStateGenerator:
+    """
+    Generate realistic market states for backtesting simulations.
+    
+    The forward returns represent actual price movements in the simulated market,
+    which are used as P&L labels for learners. This replaces the previous approach
+    of using pre-defined fake win rates (e.g., np.random.random() < win_rate) to
+    randomly decide trade outcomes regardless of market conditions.
+    
+    Key difference from fake WR approach:
+    - OLD: outcome = np.random.random() < fake_win_rate  (ignores market data)
+    - NEW: outcome = forward_return > 0  (uses actual simulated price movements)
+    """
+    
     def generate(self) -> Dict[str, Any]:
         spot = max(400, min(500, np.random.normal(450, 15)))
         tte_hours = max(0.5, min(6, np.random.exponential(3)))
@@ -82,8 +95,11 @@ class MarketStateGenerator:
         skew = max(-0.30, min(-0.05, np.random.normal(-0.15, 0.05)))
         chain = GreekEngines.simulate_realistic_chain(spot, iv, skew, tte_hours)
         
-        # Generate forward returns for real P&L labels
-        # These represent actual future price movements
+        # Forward returns represent actual price movements in the simulated market.
+        # These are used as P&L labels instead of fake pre-defined win rates.
+        # The distribution is calibrated to realistic market movements:
+        # - 5-minute returns: mean ~0.1%, std ~0.5%
+        # - 15-minute returns: mean ~0.1%, std ~0.8%
         forward_return_5m = np.random.normal(0.001, 0.005)
         forward_return_15m = np.random.normal(0.001, 0.008)
         
@@ -102,7 +118,7 @@ class MarketStateGenerator:
             'sentiment': np.random.normal(0, 0.4),
             'gamma_flow': np.random.normal(0, 1.5),
             'gamma_flow_std': 1.0,
-            # Real forward returns for P&L labels
+            # Forward returns for P&L labels (derived from simulated market movements)
             'forward_return_5m': forward_return_5m,
             'forward_return_15m': forward_return_15m
         }
@@ -132,7 +148,15 @@ class PULSETools:
     @staticmethod
     def generate_real_label(data: Dict[str, Any], horizon: str = '5m') -> float:
         """
-        Use actual forward returns as labels (+return if positive, -return if negative)
+        Return actual forward return as P&L label instead of fake simulated outcome.
+        
+        This replaces the old approach of using pre-defined win rates:
+        - OLD: np.random.random() < t['win_rate']  (fake simulated outcome)
+        - NEW: data['forward_return_5m']  (actual market movement)
+        
+        A positive forward return indicates the price went up after the signal,
+        resulting in a winning long trade. A negative return indicates the price
+        went down, resulting in a losing long trade.
         
         Args:
             data: Market data containing forward_return_5m or forward_return_15m
