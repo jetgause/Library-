@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en" x-data="{ darkMode: $persist(false), sidebarOpen: true, mobileMenuOpen: false }" :class="{ 'dark': darkMode }">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>{% block title %}Library Management System{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/persist@3.x.x/dist/cdn.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* CSS Variables for theming */
+        :root {
+            --sidebar-width: 256px;
+            --topbar-height: 64px;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --secondary-color: #8b5cf6;
+        }
+
+        /* Dark mode variables */
+        .dark {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border-color: #475569;
+        }
+
+        /* Light mode variables */
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --border-color: #e2e8f0;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+
+        /* Smooth transitions */
+        * {
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+
+        /* Sidebar animation */
+        .sidebar-transition {
+            transition: transform 0.3s ease, width 0.3s ease;
+        }
+
+        /* Toast notification styles */
+        @keyframes slideInRight {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutRight {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+
+        .toast-enter {
+            animation: slideInRight 0.3s ease-out;
+        }
+
+        .toast-exit {
+            animation: slideOutRight 0.3s ease-in;
+        }
+    </style>
+
+    <script>
+        // Tailwind CSS configuration
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#8b5cf6',
+                    }
+                }
+            }
+        }
+
+        // Toast notification system
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('toast', {
+                items: [],
+                counter: 0,
+                
+                add(message, type = 'info', duration = 3000) {
+                    const id = this.counter++;
+                    this.items.push({ id, message, type });
+                    
+                    if (duration > 0) {
+                        setTimeout(() => {
+                            this.remove(id);
+                        }, duration);
+                    }
+                },
+                
+                remove(id) {
+                    const index = this.items.findIndex(item => item.id === id);
+                    if (index > -1) {
+                        this.items.splice(index, 1);
+                    }
+                },
+                
+                success(message, duration) {
+                    this.add(message, 'success', duration);
+                },
+                
+                error(message, duration) {
+                    this.add(message, 'error', duration);
+                },
+                
+                warning(message, duration) {
+                    this.add(message, 'warning', duration);
+                },
+                
+                info(message, duration) {
+                    this.add(message, 'info', duration);
+                }
+            });
+        });
+    </script>
+
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-gray-100">
+    
+    <!-- Toast Notifications Container -->
+    <div class="fixed top-4 right-4 z-50 space-y-2" x-data>
+        <template x-for="toast in $store.toast.items" :key="toast.id">
+            <div 
+                class="toast-enter flex items-center gap-3 min-w-[300px] px-4 py-3 rounded-lg shadow-lg"
+                :class="{
+                    'bg-green-500 text-white': toast.type === 'success',
+                    'bg-red-500 text-white': toast.type === 'error',
+                    'bg-yellow-500 text-white': toast.type === 'warning',
+                    'bg-blue-500 text-white': toast.type === 'info'
+                }"
+                x-show="true"
+                x-transition:leave="toast-exit"
+            >
+                <i class="fas" :class="{
+                    'fa-check-circle': toast.type === 'success',
+                    'fa-exclamation-circle': toast.type === 'error',
+                    'fa-exclamation-triangle': toast.type === 'warning',
+                    'fa-info-circle': toast.type === 'info'
+                }"></i>
+                <span class="flex-1" x-text="toast.message"></span>
+                <button @click="$store.toast.remove(toast.id)" class="hover:opacity-75">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </template>
+    </div>
+
+    <div class="flex h-screen overflow-hidden">
+        
+        <!-- Sidebar -->
+        <aside 
+            class="sidebar-transition fixed lg:static inset-y-0 left-0 z-40 bg-white dark:bg-slate-800 border-r border-gray-200 dark:border-slate-700 flex flex-col"
+            :class="sidebarOpen ? 'w-64' : 'w-20'"
+            x-show="mobileMenuOpen || window.innerWidth >= 1024"
+            @click.away="mobileMenuOpen = false"
+        >
+            <!-- Logo -->
+            <div class="h-16 flex items-center justify-between px-4 border-b border-gray-200 dark:border-slate-700">
+                <div class="flex items-center gap-3">
+                    <i class="fas fa-book text-primary text-2xl"></i>
+                    <h1 class="font-bold text-xl" x-show="sidebarOpen" x-transition>Library</h1>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <nav class="flex-1 overflow-y-auto py-4">
+                <ul class="space-y-1 px-3">
+                    <li>
+                        <a href="{% block nav_dashboard_url %}#{% endblock %}" 
+                           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary">
+                            <i class="fas fa-home w-5"></i>
+                            <span x-show="sidebarOpen" x-transition>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% block nav_books_url %}#{% endblock %}" 
+                           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary">
+                            <i class="fas fa-book w-5"></i>
+                            <span x-show="sidebarOpen" x-transition>Books</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% block nav_members_url %}#{% endblock %}" 
+                           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary">
+                            <i class="fas fa-users w-5"></i>
+                            <span x-show="sidebarOpen" x-transition>Members</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% block nav_transactions_url %}#{% endblock %}" 
+                           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary">
+                            <i class="fas fa-exchange-alt w-5"></i>
+                            <span x-show="sidebarOpen" x-transition>Transactions</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% block nav_reports_url %}#{% endblock %}" 
+                           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary">
+                            <i class="fas fa-chart-bar w-5"></i>
+                            <span x-show="sidebarOpen" x-transition>Reports</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{% block nav_settings_url %}#{% endblock %}" 
+                           class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 hover:text-primary dark:hover:text-primary">
+                            <i class="fas fa-cog w-5"></i>
+                            <span x-show="sidebarOpen" x-transition>Settings</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Sidebar Footer -->
+            <div class="p-4 border-t border-gray-200 dark:border-slate-700">
+                <button 
+                    @click="sidebarOpen = !sidebarOpen"
+                    class="hidden lg:flex items-center justify-center w-full px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300">
+                    <i class="fas" :class="sidebarOpen ? 'fa-chevron-left' : 'fa-chevron-right'"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 flex flex-col overflow-hidden">
+            
+            <!-- Top Bar -->
+            <header class="h-16 bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between px-4 lg:px-6">
+                
+                <!-- Left Section -->
+                <div class="flex items-center gap-4">
+                    <button 
+                        @click="mobileMenuOpen = !mobileMenuOpen"
+                        class="lg:hidden text-gray-600 dark:text-gray-300 hover:text-primary">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    
+                    <!-- Search Bar -->
+                    <div class="relative hidden md:block" x-data="{ searchOpen: false }">
+                        <input 
+                            type="text" 
+                            placeholder="Search..."
+                            class="w-64 lg:w-96 pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-slate-600 bg-gray-50 dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                            @focus="searchOpen = true"
+                            @blur="setTimeout(() => searchOpen = false, 200)"
+                        >
+                        <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                </div>
+
+                <!-- Right Section -->
+                <div class="flex items-center gap-4">
+                    
+                    <!-- Dark Mode Toggle -->
+                    <button 
+                        @click="darkMode = !darkMode"
+                        class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300">
+                        <i class="fas" :class="darkMode ? 'fa-sun' : 'fa-moon'"></i>
+                    </button>
+
+                    <!-- Notifications -->
+                    <div class="relative" x-data="{ notificationOpen: false }">
+                        <button 
+                            @click="notificationOpen = !notificationOpen"
+                            class="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-600 dark:text-gray-300">
+                            <i class="fas fa-bell"></i>
+                            <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                        </button>
+
+                        <!-- Notifications Dropdown -->
+                        <div 
+                            x-show="notificationOpen"
+                            @click.away="notificationOpen = false"
+                            x-transition
+                            class="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-2 z-50">
+                            
+                            <div class="px-4 py-2 border-b border-gray-200 dark:border-slate-700">
+                                <h3 class="font-semibold">Notifications</h3>
+                            </div>
+                            
+                            <div class="max-h-96 overflow-y-auto">
+                                <a href="#" class="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 border-b border-gray-100 dark:border-slate-700">
+                                    <p class="text-sm font-medium">New book returned</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">John Doe returned "Python Programming"</p>
+                                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">2 hours ago</p>
+                                </a>
+                                <a href="#" class="block px-4 py-3 hover:bg-gray-50 dark:hover:bg-slate-700 border-b border-gray-100 dark:border-slate-700">
+                                    <p class="text-sm font-medium">Overdue book reminder</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">3 books are overdue</p>
+                                    <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">5 hours ago</p>
+                                </a>
+                            </div>
+                            
+                            <div class="px-4 py-2 border-t border-gray-200 dark:border-slate-700">
+                                <a href="#" class="text-sm text-primary hover:underline">View all notifications</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- User Menu -->
+                    <div class="relative" x-data="{ userMenuOpen: false }">
+                        <button 
+                            @click="userMenuOpen = !userMenuOpen"
+                            class="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700">
+                            <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-semibold">
+                                JG
+                            </div>
+                            <i class="fas fa-chevron-down text-xs text-gray-600 dark:text-gray-300"></i>
+                        </button>
+
+                        <!-- User Dropdown -->
+                        <div 
+                            x-show="userMenuOpen"
+                            @click.away="userMenuOpen = false"
+                            x-transition
+                            class="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-2 z-50">
+                            
+                            <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-700">
+                                <i class="fas fa-user w-5"></i> Profile
+                            </a>
+                            <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-slate-700">
+                                <i class="fas fa-cog w-5"></i> Settings
+                            </a>
+                            <hr class="my-2 border-gray-200 dark:border-slate-700">
+                            <a href="#" class="block px-4 py-2 text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-slate-700">
+                                <i class="fas fa-sign-out-alt w-5"></i> Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <main class="flex-1 overflow-y-auto bg-gray-50 dark:bg-slate-900 p-4 lg:p-6">
+                {% block content %}
+                <!-- Page content goes here -->
+                <div class="max-w-7xl mx-auto">
+                    <h1 class="text-3xl font-bold mb-6">Welcome to Library Management System</h1>
+                    
+                    <!-- Demo Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm">Total Books</p>
+                                    <p class="text-3xl font-bold mt-2">1,234</p>
+                                </div>
+                                <div class="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-book text-blue-600 dark:text-blue-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm">Active Members</p>
+                                    <p class="text-3xl font-bold mt-2">567</p>
+                                </div>
+                                <div class="w-12 h-12 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-users text-green-600 dark:text-green-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm">Borrowed Books</p>
+                                    <p class="text-3xl font-bold mt-2">89</p>
+                                </div>
+                                <div class="w-12 h-12 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-exchange-alt text-purple-600 dark:text-purple-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 dark:text-gray-400 text-sm">Overdue</p>
+                                    <p class="text-3xl font-bold mt-2">12</p>
+                                </div>
+                                <div class="w-12 h-12 bg-red-100 dark:bg-red-900 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-exclamation-triangle text-red-600 dark:text-red-400 text-xl"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Demo Toast Buttons -->
+                    <div class="bg-white dark:bg-slate-800 rounded-lg shadow p-6">
+                        <h2 class="text-xl font-semibold mb-4">Test Toast Notifications</h2>
+                        <div class="flex flex-wrap gap-3">
+                            <button 
+                                @click="$store.toast.success('Operation completed successfully!')"
+                                class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600">
+                                Success Toast
+                            </button>
+                            <button 
+                                @click="$store.toast.error('An error occurred!')"
+                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
+                                Error Toast
+                            </button>
+                            <button 
+                                @click="$store.toast.warning('Warning message!')"
+                                class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600">
+                                Warning Toast
+                            </button>
+                            <button 
+                                @click="$store.toast.info('Information message!')"
+                                class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                                Info Toast
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endblock %}
+            </main>
+        </div>
+    </div>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
