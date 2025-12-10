@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - PULSE Trading Platform{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-6">
+    
+    <!-- Page Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-1">Welcome back! Here's what's happening today.</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <button 
+                onclick="refreshMetrics()"
+                class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg flex items-center gap-2 transition">
+                <i class="fas fa-sync-alt"></i>
+                <span>Refresh</span>
+            </button>
+            <a href="/tools/create" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg flex items-center gap-2 transition">
+                <i class="fas fa-plus"></i>
+                <span>Create Tool</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Metrics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        
+        <!-- CPU Usage Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 font-medium">CPU Usage</p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="cpu-usage">{{ metrics.cpu_usage }}%</p>
+                    <div class="flex items-center gap-1 mt-2">
+                        <i class="fas fa-arrow-up text-green-500 text-xs"></i>
+                        <span class="text-xs text-green-500">2.5% from last hour</span>
+                    </div>
+                </div>
+                <div class="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
+                    <i class="fas fa-microchip text-blue-600 dark:text-blue-400 text-2xl"></i>
+                </div>
+            </div>
+            <div class="mt-4 w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
+                <div class="bg-blue-500 h-2 rounded-full transition-all duration-500" id="cpu-bar" style="width: {{ metrics.cpu_usage }}%"></div>
+            </div>
+        </div>
+
+        <!-- Memory Usage Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 font-medium">Memory Usage</p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2" id="memory-usage">{{ metrics.memory_usage }}%</p>
+                </div>
+                <div class="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
+                    <i class="fas fa-memory text-purple-600 dark:text-purple-400 text-2xl"></i>
+                </div>
+            </div>
+            <div class="mt-4 w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
+                <div class="bg-purple-500 h-2 rounded-full" id="memory-bar" style="width: {{ metrics.memory_usage }}%"></div>
+            </div>
+        </div>
+
+        <!-- Active Tools Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 font-medium">Active Tools</p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">{{ metrics.active_tools }}</p>
+                </div>
+                <div class="w-14 h-14 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <i class="fas fa-tools text-green-600 dark:text-green-400 text-2xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Requests Card -->
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6 border border-gray-200 dark:border-slate-700">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 font-medium">Requests/Sec</p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white mt-2">{{ metrics.requests_per_second }}</p>
+                </div>
+                <div class="w-14 h-14 bg-yellow-100 dark:bg-yellow-900/30 rounded-full flex items-center justify-center">
+                    <i class="fas fa-tachometer-alt text-yellow-600 dark:text-yellow-400 text-2xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">System Performance</h2>
+            <canvas id="performanceChart" height="300"></canvas>
+        </div>
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-semibold mb-4">Tool Categories</h2>
+            <canvas id="categoryChart" height="300"></canvas>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+    new Chart(performanceCtx, {
+        type: 'line',
+        data: {
+            labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'],
+            datasets: [{
+                label: 'CPU',
+                data: [30, 45, 38, 52, 48, 42],
+                borderColor: '#3b82f6',
+                tension: 0.4
+            }]
+        }
+    });
+
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    new Chart(categoryCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Data Processing', 'ML', 'Analytics', 'Monitoring'],
+            datasets: [{
+                data: [15, 12, 10, 8],
+                backgroundColor: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b']
+            }]
+        }
+    });
+
+    function refreshMetrics() {
+        fetch('/api/metrics')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('cpu-usage').textContent = data.metrics.cpu_usage + '%';
+                document.getElementById('memory-usage').textContent = data.metrics.memory_usage + '%';
+            });
+    }
+</script>
+{% endblock %}
