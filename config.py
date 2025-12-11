@@ -1,10 +1,11 @@
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # API Configuration
-API_HOST = os.getenv("API_HOST", "0.0.0.0")
+API_HOST = os.getenv("API_HOST", "127.0.0.1")
 API_PORT = int(os.getenv("API_PORT", "8000"))
 API_WORKERS = int(os.getenv("API_WORKERS", "4"))
 
@@ -40,6 +41,20 @@ CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_FILE = os.getenv("LOG_FILE", "pulse_trading.log")
 
-# Security
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+# Security - REQUIRED CONFIGURATION
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    print("CRITICAL ERROR: SECRET_KEY environment variable must be set!")
+    print("Generate with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"")
+    sys.exit(1)
+
+WEAK_KEYS = ["your-secret-key-change-in-production", "change-this-in-production", "secret", "password", "secret-key"]
+if SECRET_KEY.lower() in WEAK_KEYS or len(SECRET_KEY) < 32:
+    print("CRITICAL ERROR: SECRET_KEY is too weak or uses a default value!")
+    print("Generate a strong key with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\"")
+    sys.exit(1)
+
+ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8000,http://127.0.0.1:8000")
+ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS_STR.split(",")]
+if "*" in ALLOWED_ORIGINS:
+    print("WARNING: Wildcard CORS (*) is INSECURE! Use explicit domains in production.")
