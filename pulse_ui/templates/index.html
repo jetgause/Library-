@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PULSE Control Center - Real-time Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-bg: #0f172a;
+            --card-bg: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--dark-bg) 0%, #1e293b 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* Header & Navigation */
+        .header {
+            background: var(--card-bg);
+            border-bottom: 2px solid var(--primary-color);
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .navbar {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .logo i {
+            font-size: 2rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.1); }
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: color 0.3s;
+            font-weight: 500;
+        }
+
+        .nav-links a:hover,
+        .nav-links a.active {
+            color: var(--primary-color);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--dark-bg);
+            border-radius: 20px;
+            font-size: 0.875rem;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger-color);
+            animation: blink 1s infinite;
+        }
+
+        .status-indicator.connected {
+            background: var(--success-color);
+            animation: none;
+        }
+
+        @keyframes blink {
+            0%, 50%, 100% { opacity: 1; }
+            25%, 75% { opacity: 0.3; }
+        }
+
+        /* Main Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            transition: transform 0.3s, box-shadow 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        }
+
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        .metric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .metric-title {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-icon {
+            font-size: 1.5rem;
+            opacity: 0.6;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-change {
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .metric-change.positive {
+            color: var(--success-color);
+        }
+
+        .metric-change.negative {
+            color: var(--danger-color);
+        }
+
+        /* Charts Section */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .chart-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .chart-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .chart-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .chart-btn {
+            padding: 0.5rem 1rem;
+            background: var(--dark-bg);
+            border: none;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.875rem;
+        }
+
+        .chart-btn:hover {
+            background: var(--primary-color);
+            color: var(--text-primary);
+        }
+
+        .chart-btn.active {
+            background: var(--primary-color);
+            color: var(--text-primary);
+        }
+
+        .chart-container {
+            position: relative;
+            height: 300px;
+        }
+
+        /* Activity Feed */
+        .activity-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+        }
+
+        .activity-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .activity-feed {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            border-left: 3px solid var(--primary-color);
+            background: var(--dark-bg);
+            border-radius: 6px;
+            margin-bottom: 1rem;
+            transition: transform 0.2s;
+        }
+
+        .activity-item:hover {
+            transform: translateX(5px);
+        }
+
+        .activity-icon {
+            font-size: 1.5rem;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: var(--primary-color);
+            flex-shrink: 0;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .activity-description {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .activity-time {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+        }
+
+        /* System Status */
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .status-badge {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .status-badge.operational {
+            background: var(--success-color);
+            box-shadow: 0 0 10px var(--success-color);
+        }
+
+        .status-badge.warning {
+            background: var(--warning-color);
+            box-shadow: 0 0 10px var(--warning-color);
+        }
+
+        .status-badge.critical {
+            background: var(--danger-color);
+            box-shadow: 0 0 10px var(--danger-color);
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--dark-bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .nav-links {
+                flex-direction: column;
+                gap: 0.5rem;
+                text-align: center;
+            }
+
+            .metrics-grid,
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--border-color);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="navbar">
+            <div class="logo">
+                <i class="fas fa-heartbeat"></i>
+                <span>PULSE Control Center</span>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#" class="active">Dashboard</a></li>
+                <li><a href="#metrics">Metrics</a></li>
+                <li><a href="#analytics">Analytics</a></li>
+                <li><a href="#settings">Settings</a></li>
+            </ul>
+            <div class="connection-status">
+                <span class="status-indicator" id="wsStatus"></span>
+                <span id="wsStatusText">Connecting...</span>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <!-- Metrics Cards -->
+        <section class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Active Connections</span>
+                    <i class="fas fa-users metric-icon"></i>
+                </div>
+                <div class="metric-value" id="activeConnections">0</div>
+                <div class="metric-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    <span id="connectionsChange">0%</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">CPU Usage</span>
+                    <i class="fas fa-microchip metric-icon"></i>
+                </div>
+                <div class="metric-value" id="cpuUsage">0%</div>
+                <div class="metric-change" id="cpuChange">
+                    <i class="fas fa-arrow-up"></i>
+                    <span>0%</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Memory Usage</span>
+                    <i class="fas fa-memory metric-icon"></i>
+                </div>
+                <div class="metric-value" id="memoryUsage">0%</div>
+                <div class="metric-change" id="memoryChange">
+                    <i class="fas fa-arrow-up"></i>
+                    <span>0%</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Network I/O</span>
+                    <i class="fas fa-network-wired metric-icon"></i>
+                </div>
+                <div class="metric-value" id="networkIO">0 MB/s</div>
+                <div class="metric-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    <span id="networkChange">0%</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Request Rate</span>
+                    <i class="fas fa-tachometer-alt metric-icon"></i>
+                </div>
+                <div class="metric-value" id="requestRate">0/s</div>
+                <div class="metric-change positive">
+                    <i class="fas fa-arrow-up"></i>
+                    <span id="requestChange">0%</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-title">Error Rate</span>
+                    <i class="fas fa-exclamation-triangle metric-icon"></i>
+                </div>
+                <div class="metric-value" id="errorRate">0%</div>
+                <div class="metric-change negative">
+                    <i class="fas fa-arrow-down"></i>
+                    <span id="errorChange">0%</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Charts -->
+        <section class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2 class="chart-title">System Performance</h2>
+                    <div class="chart-controls">
+                        <button class="chart-btn active" data-range="1h">1H</button>
+                        <button class="chart-btn" data-range="6h">6H</button>
+                        <button class="chart-btn" data-range="24h">24H</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2 class="chart-title">Network Traffic</h2>
+                    <div class="chart-controls">
+                        <button class="chart-btn active" data-range="1h">1H</button>
+                        <button class="chart-btn" data-range="6h">6H</button>
+                        <button class="chart-btn" data-range="24h">24H</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="networkChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2 class="chart-title">Response Time</h2>
+                    <div class="chart-controls">
+                        <button class="chart-btn active" data-range="1h">1H</button>
+                        <button class="chart-btn" data-range="6h">6H</button>
+                        <button class="chart-btn" data-range="24h">24H</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="responseChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h2 class="chart-title">Request Distribution</h2>
+                    <div class="chart-controls">
+                        <button class="chart-btn active">Live</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="distributionChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Activity Feed -->
+        <section class="activity-section">
+            <div class="activity-header">
+                <h2 class="chart-title">
+                    <i class="fas fa-bell"></i> Recent Activity
+                </h2>
+                <button class="chart-btn">View All</button>
+            </div>
+            <div class="activity-feed" id="activityFeed">
+                <div class="activity-item">
+                    <div class="activity-icon">
+                        <i class="fas fa-info-circle"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">System Initialized</div>
+                        <div class="activity-description">PULSE Control Center started successfully</div>
+                        <div class="activity-time">Just now</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- System Status -->
+        <section class="status-grid">
+            <div class="status-item">
+                <span class="status-badge operational"></span>
+                <span>API Server</span>
+            </div>
+            <div class="status-item">
+                <span class="status-badge operational"></span>
+                <span>Database</span>
+            </div>
+            <div class="status-item">
+                <span class="status-badge operational"></span>
+                <span>Cache Service</span>
+            </div>
+            <div class="status-item">
+                <span class="status-badge operational"></span>
+                <span>Message Queue</span>
+            </div>
+            <div class="status-item">
+                <span class="status-badge operational"></span>
+                <span>Storage</span>
+            </div>
+            <div class="status-item">
+                <span class="status-badge operational"></span>
+                <span>Load Balancer</span>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // WebSocket Connection
+        let ws = null;
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+                updateConnectionStatus(true);
+                reconnectAttempts = 0;
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                updateDashboard(data);
+            };
+
+            ws.onclose = function() {
+                console.log('WebSocket disconnected');
+                updateConnectionStatus(false);
+                
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    setTimeout(connectWebSocket, 3000 * reconnectAttempts);
+                }
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function updateConnectionStatus(connected) {
+            const statusIndicator = document.getElementById('wsStatus');
+            const statusText = document.getElementById('wsStatusText');
+            
+            if (connected) {
+                statusIndicator.classList.add('connected');
+                statusText.textContent = 'Connected';
+            } else {
+                statusIndicator.classList.remove('connected');
+                statusText.textContent = 'Disconnected';
+            }
+        }
+
+        // Initialize Charts
+        const chartConfig = {
+            type: 'line',
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#94a3b8'
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: '#334155' }
+                    },
+                    x: {
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: '#334155' }
+                    }
+                }
+            }
+        };
+
+        // Performance Chart
+        const performanceCtx = document.getElementById('performanceChart').getContext('2d');
+        const performanceChart = new Chart(performanceCtx, {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'CPU %',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Memory %',
+                    data: [],
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4
+                }]
+            }
+        });
+
+        // Network Chart
+        const networkCtx = document.getElementById('networkChart').getContext('2d');
+        const networkChart = new Chart(networkCtx, {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Upload (MB/s)',
+                    data: [],
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    tension: 0.4
+                }, {
+                    label: 'Download (MB/s)',
+                    data: [],
+                    borderColor: '#ec4899',
+                    backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                    tension: 0.4
+                }]
+            }
+        });
+
+        // Response Time Chart
+        const responseCtx = document.getElementById('responseChart').getContext('2d');
+        const responseChart = new Chart(responseCtx, {
+            ...chartConfig,
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Response Time (ms)',
+                    data: [],
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    tension: 0.4
+                }]
+            }
+        });
+
+        // Distribution Chart (Doughnut)
+        const distributionCtx = document.getElementById('distributionChart').getContext('2d');
+        const distributionChart = new Chart(distributionCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+                datasets: [{
+                    data: [45, 25, 15, 10, 5],
+                    backgroundColor: [
+                        '#3b82f6',
+                        '#10b981',
+                        '#f59e0b',
+                        '#ef4444',
+                        '#8b5cf6'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Update Dashboard with WebSocket Data
+        function updateDashboard(data) {
+            // Update metrics
+            if (data.metrics) {
+                updateMetric('activeConnections', data.metrics.connections, data.metrics.connectionsChange);
+                updateMetric('cpuUsage', data.metrics.cpu + '%', data.metrics.cpuChange);
+                updateMetric('memoryUsage', data.metrics.memory + '%', data.metrics.memoryChange);
+                updateMetric('networkIO', data.metrics.network + ' MB/s', data.metrics.networkChange);
+                updateMetric('requestRate', data.metrics.requests + '/s', data.metrics.requestChange);
+                updateMetric('errorRate', data.metrics.errors + '%', data.metrics.errorChange);
+            }
+
+            // Update charts
+            if (data.chartData) {
+                updateChart(performanceChart, data.chartData.performance);
+                updateChart(networkChart, data.chartData.network);
+                updateChart(responseChart, data.chartData.response);
+            }
+
+            // Update activity feed
+            if (data.activity) {
+                addActivityItem(data.activity);
+            }
+        }
+
+        function updateMetric(id, value, change) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.textContent = value;
+            }
+            
+            const changeElement = document.getElementById(id + 'Change');
+            if (changeElement && change !== undefined) {
+                const changeSpan = changeElement.querySelector('span');
+                if (changeSpan) {
+                    changeSpan.textContent = Math.abs(change) + '%';
+                }
+                
+                changeElement.classList.remove('positive', 'negative');
+                changeElement.classList.add(change >= 0 ? 'positive' : 'negative');
+                
+                const icon = changeElement.querySelector('i');
+                if (icon) {
+                    icon.className = change >= 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down';
+                }
+            }
+        }
+
+        function updateChart(chart, newData) {
+            if (!newData) return;
+
+            const now = new Date().toLocaleTimeString();
+            chart.data.labels.push(now);
+            
+            newData.forEach((value, index) => {
+                chart.data.datasets[index].data.push(value);
+            });
+
+            // Keep last 20 data points
+            if (chart.data.labels.length > 20) {
+                chart.data.labels.shift();
+                chart.data.datasets.forEach(dataset => dataset.data.shift());
+            }
+
+            chart.update();
+        }
+
+        function addActivityItem(activity) {
+            const feed = document.getElementById('activityFeed');
+            const item = document.createElement('div');
+            item.className = 'activity-item';
+            item.innerHTML = `
+                <div class="activity-icon">
+                    <i class="${activity.icon || 'fas fa-info-circle'}"></i>
+                </div>
+                <div class="activity-content">
+                    <div class="activity-title">${activity.title}</div>
+                    <div class="activity-description">${activity.description}</div>
+                    <div class="activity-time">${activity.time || 'Just now'}</div>
+                </div>
+            `;
+            
+            feed.insertBefore(item, feed.firstChild);
+            
+            // Keep last 10 items
+            while (feed.children.length > 10) {
+                feed.removeChild(feed.lastChild);
+            }
+        }
+
+        // Generate sample data for demo
+        function generateSampleData() {
+            const data = {
+                metrics: {
+                    connections: Math.floor(Math.random() * 100) + 50,
+                    connectionsChange: (Math.random() * 10 - 5).toFixed(1),
+                    cpu: (Math.random() * 60 + 20).toFixed(1),
+                    cpuChange: (Math.random() * 10 - 5).toFixed(1),
+                    memory: (Math.random() * 40 + 40).toFixed(1),
+                    memoryChange: (Math.random() * 10 - 5).toFixed(1),
+                    network: (Math.random() * 10 + 5).toFixed(2),
+                    networkChange: (Math.random() * 10 - 5).toFixed(1),
+                    requests: Math.floor(Math.random() * 1000) + 500,
+                    requestChange: (Math.random() * 10 - 5).toFixed(1),
+                    errors: (Math.random() * 2).toFixed(2),
+                    errorChange: (Math.random() * 2 - 1).toFixed(1)
+                },
+                chartData: {
+                    performance: [
+                        (Math.random() * 60 + 20).toFixed(1),
+                        (Math.random() * 40 + 40).toFixed(1)
+                    ],
+                    network: [
+                        (Math.random() * 5 + 2).toFixed(2),
+                        (Math.random() * 8 + 3).toFixed(2)
+                    ],
+                    response: [(Math.random() * 100 + 50).toFixed(0)]
+                }
+            };
+            
+            updateDashboard(data);
+        }
+
+        // Initialize
+        connectWebSocket();
+
+        // Generate sample data every 2 seconds for demo
+        setInterval(generateSampleData, 2000);
+
+        // Chart control buttons
+        document.querySelectorAll('.chart-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const parent = this.parentElement;
+                parent.querySelectorAll('.chart-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+    </script>
+</body>
+</html>
