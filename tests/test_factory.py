@@ -18,8 +18,9 @@ class MockTool:
         self.name = name
         self.category = category
         self.active = active
-        self.created_at = datetime.utcnow()
-        self.updated_at = datetime.utcnow()
+        now = datetime.utcnow()
+        self.created_at = now
+        self.updated_at = now
     
     def __repr__(self):
         return f"MockTool(name='{self.name}', category='{self.category}', active={self.active})"
