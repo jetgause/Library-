@@ -332,6 +332,7 @@ if tree.improvement > 0.15:
 
 ## 📚 **Documentation**
 
+- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md) - **How Agents, Optimization Engines, and Smart Library Work Together**
 - [Tool Development Manual](docs/TOOL_DEVELOPMENT_MANUAL.md)
 - [Backtest Methodology](docs/BACKTEST_PROOF.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
