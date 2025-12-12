@@ -1,8 +1,13 @@
 import os
 import sys
-from dotenv import load_dotenv
 
-load_dotenv()
+# Try to load dotenv if available, but don't fail if it's not
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # dotenv not available, just use environment variables directly
+    pass
 
 # Detect environment
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
