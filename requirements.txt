@@ -7,3 +7,10 @@ pytest-asyncio>=0.21.0
 python-dateutil>=2.8.0
 structlog>=23.1.0
 mypy>=1.5.0
+
+# Performance Testing Dependencies
+psutil>=5.9.0
+pytest-benchmark>=4.0.0
+fastapi>=0.104.0
+uvicorn>=0.24.0
+httpx>=0.25.0
