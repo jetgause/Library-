@@ -653,8 +653,9 @@ __all__ = [
 
 def sanitize_input(text: str) -> str:
     """Sanitize input text by removing dangerous content."""
-    # Remove script tags
-    text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.IGNORECASE | re.DOTALL)
+    # Remove script tags (including variations with spaces before >)
+    # This regex handles: <script>, <script >, <script  >, etc.
+    text = re.sub(r'<script[^>]*>.*?</script\s*>', '', text, flags=re.IGNORECASE | re.DOTALL)
     # Remove other dangerous tags
     text = re.sub(r'<(iframe|object|embed|applet)[^>]*>', '', text, flags=re.IGNORECASE)
     # Remove javascript: protocol

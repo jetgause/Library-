@@ -9,6 +9,9 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     
     strategy:
       matrix:
@@ -101,6 +104,8 @@ jobs:
   
   lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
       - name: Checkout code
@@ -136,6 +141,9 @@ jobs:
   
   security-scan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     
     steps:
       - name: Checkout code
@@ -161,6 +169,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, lint, security-scan]
     if: always()
+    permissions:
+      contents: read
     
     steps:
       - name: Check build status
