@@ -812,3 +812,19 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 60)
     print("Encryption module loaded successfully!")
+
+
+# ============================================================================
+# SIMPLIFIED API FOR TESTS
+# ============================================================================
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt."""
+    hasher = PasswordHasher()
+    return hasher.hash(password)
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against its hash."""
+    hasher = PasswordHasher()
+    return hasher.verify(password, hashed)

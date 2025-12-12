@@ -627,6 +627,7 @@ __all__ = [
     "sanitize_query_param",
     "validate_pagination",
     "validate_string_input",
+    "sanitize_input",
     
     # FastAPI dependencies
     "validate_request_body_size",
@@ -644,3 +645,20 @@ __all__ = [
     # Utility classes
     "InputValidator",
 ]
+
+
+# ============================================================================
+# SIMPLIFIED API FOR TESTS
+# ============================================================================
+
+def sanitize_input(text: str) -> str:
+    """Sanitize input text by removing dangerous content."""
+    # Remove script tags
+    text = re.sub(r'<script[^>]*>.*?</script>', '', text, flags=re.IGNORECASE | re.DOTALL)
+    # Remove other dangerous tags
+    text = re.sub(r'<(iframe|object|embed|applet)[^>]*>', '', text, flags=re.IGNORECASE)
+    # Remove javascript: protocol
+    text = re.sub(r'javascript:', '', text, flags=re.IGNORECASE)
+    # Remove event handlers
+    text = re.sub(r'on\w+\s*=', '', text, flags=re.IGNORECASE)
+    return text

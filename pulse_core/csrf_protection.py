@@ -885,3 +885,29 @@ if __name__ == "__main__":
     
     print("\n" + "=" * 50)
     print("Module loaded successfully!")
+
+
+# ============================================================================
+# SIMPLIFIED API FOR TESTS
+# ============================================================================
+
+# Global token store for simple API
+_token_store: Dict[str, str] = {}
+
+
+def generate_csrf_token() -> str:
+    """Generate a simple CSRF token for testing."""
+    return secrets.token_urlsafe(32)
+
+
+def store_csrf_token(session_id: str, token: str) -> None:
+    """Store a CSRF token for a session."""
+    _token_store[session_id] = token
+
+
+def validate_csrf_token(session_id: str, token: str) -> bool:
+    """Validate a CSRF token for a session."""
+    stored_token = _token_store.get(session_id)
+    if not stored_token:
+        return False
+    return hmac.compare_digest(stored_token, token)
