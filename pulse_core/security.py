@@ -474,9 +474,25 @@ class RateLimiter:
     """Rate limiting for API endpoints"""
     
     def __init__(self, max_requests: int = SecurityConfig.RATE_LIMIT_MAX_REQUESTS,
-                 window: int = SecurityConfig.RATE_LIMIT_WINDOW):
+                 window_seconds: int = None, window: int = None):
+        """
+        Initialize rate limiter.
+        
+        Args:
+            max_requests: Maximum number of requests allowed in the window
+            window_seconds: Time window in seconds (preferred parameter)
+            window: Deprecated - use window_seconds instead
+        """
         self.max_requests = max_requests
-        self.window = window
+        
+        # Prefer window_seconds, fall back to window for backwards compatibility
+        if window_seconds is not None:
+            self.window = window_seconds
+        elif window is not None:
+            self.window = window
+        else:
+            self.window = SecurityConfig.RATE_LIMIT_WINDOW
+        
         self.requests: Dict[str, List[float]] = defaultdict(list)
     
     def is_allowed(self, identifier: str) -> bool:
@@ -828,6 +844,68 @@ def sanitize_dict(data: Dict[str, Any], sensitive_keys: List[str] = None) -> Dic
     return sanitized
 
 
+def generate_secure_token(length: int = 32) -> str:
+    """Generate cryptographically secure random token"""
+    return secrets.token_urlsafe(length)
+
+
+def create_session(user_id: str, ttl_seconds: int = 1800) -> Dict[str, Any]:
+    """Create a new secure session"""
+    return {
+        'session_id': secrets.token_urlsafe(32),
+        'user_id': user_id,
+        'created_at': datetime.utcnow().isoformat(),
+        'expires_at': (datetime.utcnow() + timedelta(seconds=ttl_seconds)).isoformat(),
+        'ttl_seconds': ttl_seconds
+    }
+
+
+def is_session_valid(session: Dict[str, Any]) -> bool:
+    """Check if session is still valid"""
+    try:
+        expires_at = datetime.fromisoformat(session['expires_at'])
+        return datetime.utcnow() < expires_at
+    except (KeyError, ValueError):
+        return False
+
+
+def validate_password_strength(password: str) -> Dict[str, Any]:
+    """Validate password strength and return detailed feedback"""
+    errors = []
+    
+    if len(password) < 8:
+        errors.append("Password must be at least 8 characters long")
+    
+    if not re.search(r'[a-z]', password):
+        errors.append("Password must contain at least one lowercase letter")
+    
+    if not re.search(r'[A-Z]', password):
+        errors.append("Password must contain at least one uppercase letter")
+    
+    if not re.search(r'\d', password):
+        errors.append("Password must contain at least one number")
+    
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        errors.append("Password must contain at least one special character")
+    
+    return {
+        'valid': len(errors) == 0,
+        'errors': errors,
+        'strength': 'strong' if len(errors) == 0 else 'weak'
+    }
+
+
+def mask_sensitive_data(data: Union[str, Dict[str, Any]], visible_chars: int = 4, mask_char: str = '*') -> Union[str, Dict[str, Any]]:
+    """Mask sensitive data in strings or dictionaries"""
+    if isinstance(data, dict):
+        return sanitize_dict(data)
+    elif isinstance(data, str):
+        if len(data) <= visible_chars:
+            return mask_char * len(data)
+        return data[:visible_chars] + mask_char * (len(data) - visible_chars)
+    return data
+
+
 # ============================================================================
 # EXPORTS
 # ============================================================================
@@ -850,4 +928,8 @@ __all__ = [
     'mask_sensitive_data',
     'is_safe_redirect',
     'sanitize_dict',
+    'generate_secure_token',
+    'create_session',
+    'is_session_valid',
+    'validate_password_strength',
 ]

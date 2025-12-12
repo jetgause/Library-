@@ -95,11 +95,41 @@ async def execute_tool(request: ToolExecuteRequest):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Enhanced health check endpoint with security status."""
+    import config
+    
+    security_checks = {
+        "secret_key_configured": len(config.SECRET_KEY) >= 32,
+        "cors_secure": "*" not in config.ALLOWED_ORIGINS,
+        "api_localhost_bound": config.API_HOST in ["127.0.0.1", "localhost"],
+    }
+    
+    all_secure = all(security_checks.values())
+    
     return {
-        "status": "healthy",
+        "status": "healthy" if all_secure else "degraded",
         "timestamp": datetime.now().isoformat(),
-        "version": "2.0.0"
+        "version": "2.0.0",
+        "environment": config.ENVIRONMENT,
+        "security": {
+            "status": "secure" if all_secure else "warnings",
+            "checks": security_checks
+        }
+    }
+
+
+@app.get("/health/security")
+async def security_health():
+    """Detailed security health endpoint."""
+    import config
+    
+    return {
+        "secret_key_length": len(config.SECRET_KEY),
+        "cors_origins_count": len(config.ALLOWED_ORIGINS),
+        "has_wildcard_cors": "*" in config.ALLOWED_ORIGINS,
+        "api_host": config.API_HOST,
+        "is_production": config.IS_PRODUCTION,
+        "environment": config.ENVIRONMENT
     }
 
 

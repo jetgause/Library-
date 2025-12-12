@@ -6,6 +6,78 @@ A sophisticated, production-ready options trading platform featuring 52 speciali
 
 ---
 
+## 🚀 Quick Start (2 Minutes)
+
+### Prerequisites
+- Python 3.8+
+- pip
+
+### Setup
+```bash
+# 1. Clone the repository
+git clone https://github.com/jetgause/Library-.git
+cd Library-
+
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Configure environment (automated)
+python3 setup_env.py --auto
+
+# 4. Start the application
+python3 api_server.py
+```
+
+### Verify Installation
+```bash
+# Run tests
+pytest tests/ -v
+
+# Check API health
+curl http://127.0.0.1:8000/health
+
+# View API docs
+open http://127.0.0.1:8000/docs
+```
+
+## 🔒 Security
+
+This platform has mandatory security requirements:
+- **SECRET_KEY** must be configured (minimum 32 characters)
+- **CORS origins** must be explicitly set (no wildcards in production)
+- **API binding** defaults to localhost
+
+See [SECURITY_SETUP.md](SECURITY_SETUP.md) for complete security configuration.
+
+---
+
+## 📊 Features
+
+- **52 optimized trading tools** (Gamma Wall Pin, Charm Flow, Vanna Shock, etc.)
+- **Smart marketplace** with tool rental system
+- **Real-time options data analysis**
+- **Paper trading engine**
+- **Web UI with PWA support**
+- **Comprehensive security framework**
+
+---
+
+## 🧪 Testing
+
+Run the full test suite:
+```bash
+pytest tests/ -v --cov
+```
+
+Run specific test suites:
+```bash
+pytest tests/test_security.py -v    # Security tests
+pytest tests/test_factory.py -v     # Tool factory tests
+pytest tests/test_marketplace.py -v # Marketplace tests
+```
+
+---
+
 ## 🚀 **What Makes PULSE Unique**
 
 - **52 Trading Tools** across 5 tiers (Free/Pro/Pro+) targeting specific market microstructure events
@@ -340,20 +412,39 @@ if tree.improvement > 0.15:
 
 ---
 
-## 📜 **License**
+## 📚 Documentation
+
+- [Security Setup Guide](SECURITY_SETUP.md)
+- [Repository Manifest](REPOSITORY_MANIFEST.md)
+- [API Documentation](http://127.0.0.1:8000/docs) (when running)
+- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)
+- [Tool Development Manual](docs/TOOL_DEVELOPMENT_MANUAL.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Please read CONTRIBUTING.md first.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `pytest tests/ -v`
+5. Submit a pull request
+
+---
+
+## 📝 License
 
 MIT License - See LICENSE file
 
 ---
 
-## 🤝 **Contributing**
+## 🆘 Support
 
-Contributions welcome! Please read CONTRIBUTING.md first.
-
----
-
-## 📧 **Contact**
-
+- **Issues**: https://github.com/jetgause/Library-/issues
+- **Security**: See [SECURITY_SETUP.md](SECURITY_SETUP.md)
 - **GitHub**: [@jetgause](https://github.com/jetgause)
 - **Repository**: [Library-](https://github.com/jetgause/Library-)
 
