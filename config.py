@@ -7,7 +7,10 @@ try:
     load_dotenv()
 except ImportError:
     # dotenv not available, just use environment variables directly
-    pass
+    # This is expected in production environments with proper env var configuration
+    import logging
+    logging.basicConfig(level=logging.INFO)
+    logging.info("python-dotenv not found, using environment variables directly")
 
 # Detect environment
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()

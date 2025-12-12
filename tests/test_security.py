@@ -31,6 +31,29 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 # ============================================================================
+# TEST FIXTURES
+# ============================================================================
+
+@pytest.fixture(autouse=True)
+def cleanup_environment():
+    """Fixture to ensure environment is cleaned up after each test."""
+    # Store original environment
+    original_env = os.environ.copy()
+    
+    yield
+    
+    # Restore original environment
+    os.environ.clear()
+    os.environ.update(original_env)
+
+
+@pytest.fixture
+def valid_secret_key():
+    """Fixture to provide a valid SECRET_KEY."""
+    return secrets.token_urlsafe(32)
+
+
+# ============================================================================
 # CONFIGURATION TESTS
 # ============================================================================
 
@@ -39,12 +62,20 @@ class TestConfigurationSecurity:
     
     def test_secret_key_required(self):
         """Verify SECRET_KEY is required."""
-        with patch.dict(os.environ, {}, clear=True):
-            # Load .env first if exists
-            from dotenv import load_dotenv
-            # Clear the environment variable
+        # Save the original SECRET_KEY if it exists
+        original_key = os.environ.get('SECRET_KEY')
+        
+        try:
+            # Clear the SECRET_KEY
             if 'SECRET_KEY' in os.environ:
                 del os.environ['SECRET_KEY']
+            
+            # Try to load dotenv, but don't fail if not available
+            try:
+                from dotenv import load_dotenv
+                load_dotenv()
+            except ImportError:
+                pass
             
             with pytest.raises(SystemExit) as exc_info:
                 # Reimport config to trigger validation
@@ -53,6 +84,11 @@ class TestConfigurationSecurity:
                 importlib.reload(config)
             
             assert exc_info.value.code == 1
+        
+        finally:
+            # Restore the original key
+            if original_key:
+                os.environ['SECRET_KEY'] = original_key
     
     def test_secret_key_minimum_length(self):
         """Enforce SECRET_KEY minimum 32 characters."""

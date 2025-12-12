@@ -474,15 +474,25 @@ class RateLimiter:
     """Rate limiting for API endpoints"""
     
     def __init__(self, max_requests: int = SecurityConfig.RATE_LIMIT_MAX_REQUESTS,
-                 window: int = None, window_seconds: int = None):
+                 window_seconds: int = None, window: int = None):
+        """
+        Initialize rate limiter.
+        
+        Args:
+            max_requests: Maximum number of requests allowed in the window
+            window_seconds: Time window in seconds (preferred parameter)
+            window: Deprecated - use window_seconds instead
+        """
         self.max_requests = max_requests
-        # Accept either window or window_seconds parameter
+        
+        # Prefer window_seconds, fall back to window for backwards compatibility
         if window_seconds is not None:
             self.window = window_seconds
         elif window is not None:
             self.window = window
         else:
             self.window = SecurityConfig.RATE_LIMIT_WINDOW
+        
         self.requests: Dict[str, List[float]] = defaultdict(list)
     
     def is_allowed(self, identifier: str) -> bool:

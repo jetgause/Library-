@@ -190,9 +190,12 @@ def log_authentication_event(user_id: str, success: bool, details: Optional[Dict
     """
     event_details = {
         "user_id": user_id,
-        "success": success,
-        **(details or {})
+        "success": success
     }
+    
+    # Safely merge additional details
+    if details is not None:
+        event_details.update(details)
     
     log_security_event(
         "authentication",
