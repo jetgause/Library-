@@ -69,23 +69,27 @@ class DatabaseOptimizer:
         
         cursor = self.conn.cursor()
         
-        # Get all tables
+        # Get all tables (excluding system tables)
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
         tables = [row[0] for row in cursor.fetchall()]
         
         stats = []
         
         for table in tables:
-            # Get row count
-            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            # Validate table name to prevent SQL injection
+            if not table.replace('_', '').isalnum():
+                continue
+            
+            # Get row count (using parameter binding for safety)
+            cursor.execute(f"SELECT COUNT(*) FROM '{table}'")
             row_count = cursor.fetchone()[0]
             
             # Get table info
-            cursor.execute(f"PRAGMA table_info({table})")
+            cursor.execute(f"PRAGMA table_info('{table}')")
             columns = cursor.fetchall()
             
             # Get index info
-            cursor.execute(f"PRAGMA index_list({table})")
+            cursor.execute(f"PRAGMA index_list('{table}')")
             indexes = cursor.fetchall()
             
             stats.append({
@@ -125,24 +129,28 @@ class DatabaseOptimizer:
         
         for table, column in patterns:
             # Check if table exists
-            cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
             if not cursor.fetchone():
                 continue
             
+            # Validate table name to prevent SQL injection
+            if not table.replace('_', '').isalnum():
+                continue
+            
             # Check if column exists
-            cursor.execute(f"PRAGMA table_info({table})")
+            cursor.execute(f"PRAGMA table_info('{table}')")
             columns = [col[1] for col in cursor.fetchall()]
             if column not in columns:
                 continue
             
             # Check if index already exists
-            cursor.execute(f"PRAGMA index_list({table})")
+            cursor.execute(f"PRAGMA index_list('{table}')")
             indexes = cursor.fetchall()
             
             # Get indexed columns
             indexed_columns = set()
             for idx in indexes:
-                cursor.execute(f"PRAGMA index_info({idx[1]})")
+                cursor.execute(f"PRAGMA index_info('{idx[1]}')")
                 for col_info in cursor.fetchall():
                     indexed_columns.add(col_info[2])
             
@@ -171,9 +179,15 @@ class DatabaseOptimizer:
         if not index_name:
             index_name = f"idx_{table}_{column}"
         
+        # Validate table and column names to prevent SQL injection
+        if not table.replace('_', '').isalnum() or not column.replace('_', '').isalnum():
+            print(f"❌ Invalid table or column name: {table}.{column}")
+            return False
+        
         try:
             cursor = self.conn.cursor()
-            cursor.execute(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({column})")
+            # Use single quotes for identifiers in SQLite
+            cursor.execute(f"CREATE INDEX IF NOT EXISTS '{index_name}' ON '{table}'('{column}')")
             self.conn.commit()
             print(f"✅ Created index {index_name} on {table}.{column}")
             return True

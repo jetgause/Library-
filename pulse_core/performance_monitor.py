@@ -332,18 +332,17 @@ class PerformanceMonitor:
         
         while True:
             try:
+                # Get CPU and memory measurements without holding lock
+                cpu_percent = process.cpu_percent(interval=1)
+                mem_info = process.memory_info()
+                mem_percent = process.memory_percent()
+                mem_mb = mem_info.rss / 1024 / 1024
+                
+                # Only acquire lock to update the data structures
                 with self._lock:
-                    # CPU percentage
-                    cpu_percent = process.cpu_percent(interval=1)
                     self.cpu_samples.append(cpu_percent)
-                    
-                    # Memory usage
-                    mem_info = process.memory_info()
-                    mem_percent = process.memory_percent()
-                    mem_mb = mem_info.rss / 1024 / 1024
                     self.memory_samples.append((mem_percent, mem_mb))
                 
-                time.sleep(1)
             except Exception:
                 time.sleep(5)
     

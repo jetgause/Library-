@@ -34,7 +34,12 @@ except ImportError:
 
 @pytest.fixture
 def client():
-    """Create a test client for the API."""
+    """
+    Create a test client for the API.
+    
+    Returns:
+        TestClient: FastAPI TestClient instance for making test requests
+    """
     from fastapi.testclient import TestClient
     from api_server import app
     return TestClient(app)
@@ -138,12 +143,14 @@ class TestMemoryUsage:
         """Detect memory leaks in repeated operations."""
         process = psutil.Process(os.getpid())
         
+        # Import outside the loop to avoid overhead
+        from paper_trading import PaperTradingEngine
+        
         # Baseline memory
         baseline = process.memory_info().rss / 1024 / 1024  # MB
         
         # Perform 1000 operations
         for _ in range(1000):
-            from paper_trading import PaperTradingEngine
             engine = PaperTradingEngine()
             del engine
         
