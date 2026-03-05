@@ -445,7 +445,7 @@ def get_search_query(
 
 def get_sort_params(
     sort_by: Optional[str] = Query(None, max_length=100, description="Field to sort by"),
-    sort_order: Optional[str] = Query("asc", regex="^(asc|desc)$", description="Sort order")
+    sort_order: Optional[str] = Query("asc", pattern="^(asc|desc)$", description="Sort order")
 ) -> Dict[str, Optional[str]]:
     """
     FastAPI dependency to get and validate sort parameters.
@@ -518,7 +518,7 @@ class SearchParams(BaseModel):
 class SortParams(BaseModel):
     """Pydantic model for sort parameters."""
     sort_by: Optional[str] = Field(None, max_length=100, description="Field to sort by")
-    sort_order: str = Field("asc", regex="^(asc|desc)$", description="Sort order")
+    sort_order: str = Field("asc", pattern="^(asc|desc)$", description="Sort order")
     
     @validator("sort_by")
     def validate_sort_by(cls, v):
