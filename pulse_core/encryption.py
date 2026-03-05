@@ -27,14 +27,21 @@ from typing import Optional, Dict, Any, Union, Tuple
 from datetime import datetime, timedelta
 from enum import Enum
 import logging
+import importlib.util
 
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.backends import default_backend
-from cryptography.fernet import Fernet
-import bcrypt
+HAS_CRYPTOGRAPHY = importlib.util.find_spec("cryptography") is not None
+HAS_BCRYPT = importlib.util.find_spec("bcrypt") is not None
+
+if HAS_CRYPTOGRAPHY:
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa, padding
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.fernet import Fernet
+
+if HAS_BCRYPT:
+    import bcrypt
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -119,6 +126,8 @@ class AESEncryption:
         Args:
             key: 32-byte encryption key for AES-256
         """
+        if not HAS_CRYPTOGRAPHY:
+            raise RuntimeError("cryptography package is required for AESEncryption")
         if len(key) != 32:
             raise ValueError("AES-256 requires a 32-byte key")
         self.key = key
@@ -188,6 +197,8 @@ class RSAEncryption:
         Args:
             key_size: RSA key size in bits (2048 or 4096)
         """
+        if not HAS_CRYPTOGRAPHY:
+            raise RuntimeError("cryptography package is required for RSAEncryption")
         self.key_size = key_size
         self.private_key = None
         self.public_key = None
@@ -314,9 +325,14 @@ class PasswordHasher:
             Hashed password (base64 encoded)
         """
         password_bytes = password.encode('utf-8')
-        salt = bcrypt.gensalt(rounds=self.rounds)
-        hashed = bcrypt.hashpw(password_bytes, salt)
-        return base64.b64encode(hashed).decode('utf-8')
+        if HAS_BCRYPT:
+            salt = bcrypt.gensalt(rounds=self.rounds)
+            hashed = bcrypt.hashpw(password_bytes, salt)
+            return base64.b64encode(hashed).decode('utf-8')
+
+        salt = secrets.token_hex(16)
+        dk = hashlib.pbkdf2_hmac("sha256", password_bytes, salt.encode("utf-8"), 200000)
+        return f"pbkdf2_sha256$200000${salt}${base64.b64encode(dk).decode('utf-8')}"
     
     def verify(self, password: str, hashed: str) -> bool:
         """
@@ -331,8 +347,15 @@ class PasswordHasher:
         """
         try:
             password_bytes = password.encode('utf-8')
-            hashed_bytes = base64.b64decode(hashed)
-            return bcrypt.checkpw(password_bytes, hashed_bytes)
+            if hashed.startswith("pbkdf2_sha256$"):
+                _, iterations, salt, encoded = hashed.split("$", 3)
+                dk = hashlib.pbkdf2_hmac("sha256", password_bytes, salt.encode("utf-8"), int(iterations))
+                return hmac.compare_digest(base64.b64encode(dk).decode("utf-8"), encoded)
+
+            if HAS_BCRYPT:
+                hashed_bytes = base64.b64decode(hashed)
+                return bcrypt.checkpw(password_bytes, hashed_bytes)
+            return False
         except Exception as e:
             logger.error(f"Password verification failed: {str(e)}")
             return False
@@ -340,10 +363,13 @@ class PasswordHasher:
     def needs_rehash(self, hashed: str) -> bool:
         """Check if password hash needs to be updated with new cost factor."""
         try:
-            hashed_bytes = base64.b64decode(hashed)
-            # Extract cost factor from bcrypt hash
-            cost = int(hashed_bytes[4:6])
-            return cost < self.rounds
+            if hashed.startswith("pbkdf2_sha256$"):
+                return False
+            if HAS_BCRYPT:
+                hashed_bytes = base64.b64decode(hashed)
+                cost = int(hashed_bytes[4:6])
+                return cost < self.rounds
+            return False
         except Exception:
             return True
 
