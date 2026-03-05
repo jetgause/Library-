@@ -231,6 +231,49 @@ async def get_paper_account(user_id: str):
     )
 
 
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for live signal streaming and heartbeat messages."""
+    await websocket.accept()
+    active_websockets.append(websocket)
+    try:
+        await websocket.send_json({
+            "type": "welcome",
+            "message": "Connected to PULSE live stream",
+            "timestamp": datetime.now().isoformat(),
+        })
+        while True:
+            payload = await websocket.receive_json()
+            tool_id = int(payload.get("tool_id", 1))
+            symbol = str(payload.get("symbol", "SPY"))
+            data = payload.get("data", {})
+
+            from production_tool_executor import execute_tool as exec_tool
+            result = exec_tool(tool_id=tool_id, data=data, symbol=symbol)
+            if result is None:
+                await websocket.send_json({
+                    "type": "error",
+                    "detail": f"Tool {tool_id} not found",
+                    "timestamp": datetime.now().isoformat(),
+                })
+                continue
+
+            message = {
+                "type": "signal",
+                "payload": result,
+                "timestamp": datetime.now().isoformat(),
+            }
+            await websocket.send_json(message)
+    except WebSocketDisconnect:
+        logger.info("WebSocket client disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}")
+    finally:
+        if websocket in active_websockets:
+            active_websockets.remove(websocket)
+
+
+
 @app.get("/health")
 async def health_check():
     """Enhanced health check endpoint with security status."""

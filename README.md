@@ -318,11 +318,28 @@ POST /api/v1/consensus
 GET /health
 ```
 
+### **Paper Trading API**
+```bash
+POST /api/v1/paper/{user_id}/positions
+POST /api/v1/paper/{user_id}/positions/{position_id}/close
+GET  /api/v1/paper/{user_id}/positions
+GET  /api/v1/paper/{user_id}/account
+```
+
 ### **WebSocket Live Updates**
 ```javascript
 const ws = new WebSocket('ws://localhost:8000/ws');
+
 ws.onmessage = (event) => {
   console.log('Signal:', JSON.parse(event.data));
+};
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    tool_id: 10,
+    symbol: 'SPY',
+    data: { price: 530.2, rsi: 62 }
+  }));
 };
 ```
 
