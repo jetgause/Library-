@@ -11,6 +11,21 @@ A sophisticated, production-ready options trading platform featuring 52 speciali
 ### Prerequisites
 - Python 3.8+
 - pip
+- (Linux) system build tools for compiling native Python dependencies (`make`, `gcc`)
+
+If `make` or `gcc` are missing on Ubuntu/Debian, install them first:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential
+```
+
+Then verify:
+
+```bash
+make --version
+gcc --version
+```
 
 ### Setup
 ```bash
