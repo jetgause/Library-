@@ -56,7 +56,7 @@ class ToolExecuteRequest(BaseModel):
     tool_id: int = Field(..., description="Tool ID to execute (1-52)")
     user_id: str = Field(..., description="User identifier")
     symbol: str = Field(default="SPY", description="Trading symbol")
-    data: Dict[str, Any] = Field(default={}, description="Market data for tool execution")
+    data: Dict[str, Any] = Field(default_factory=dict, description="Market data for tool execution")
 
 
 class ToolResponse(BaseModel):
@@ -65,7 +65,7 @@ class ToolResponse(BaseModel):
     signal: int
     score: float
     timestamp: str
-    metadata: Dict[str, Any] = {}
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 class ConsensusRequest(BaseModel):
     tool_ids: List[int] = Field(..., min_length=1, max_length=52)
@@ -154,14 +154,25 @@ async def execute_tool(request: ToolExecuteRequest):
 async def get_consensus_signal(request: ConsensusRequest):
     """Compute weighted consensus signal from multiple tools."""
     try:
+        invalid_ids = [tool_id for tool_id in request.tool_ids if not (1 <= tool_id <= 52)]
+        if invalid_ids:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid tool_ids: {invalid_ids}. Allowed range is 1-52.",
+            )
+
+        deduped_ids = list(dict.fromkeys(request.tool_ids))
+
         from production_tool_executor import get_consensus
 
         consensus = get_consensus(
-            tool_ids=request.tool_ids,
+            tool_ids=deduped_ids,
             data=request.data,
             symbol=request.symbol,
         )
         return ConsensusResponse(**consensus)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting consensus: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

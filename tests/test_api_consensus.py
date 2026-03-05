@@ -31,3 +31,16 @@ def test_consensus_endpoint_returns_weighted_signal():
     assert body["consensus_signal"] in (-1, 0, 1)
     assert 0.0 <= body["confidence"] <= 1.0
     assert len(body["tools"]) == 5
+
+
+def test_consensus_endpoint_rejects_invalid_tool_ids():
+    client = TestClient(app)
+    payload = {
+        "tool_ids": [1, 99],
+        "symbol": "SPY",
+        "data": {"price": 100},
+    }
+
+    resp = client.post("/api/v1/consensus", json=payload)
+    assert resp.status_code == 400
+    assert "Invalid tool_ids" in resp.json()["detail"]
