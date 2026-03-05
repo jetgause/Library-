@@ -13,6 +13,11 @@ import json
 from datetime import datetime
 import uvicorn
 import logging
+import os
+import secrets
+
+# Ensure local/dev runs have a secure key before strict config import
+os.environ.setdefault("SECRET_KEY", secrets.token_urlsafe(32))
 
 # Import internal modules
 from config import *
