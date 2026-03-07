@@ -53,6 +53,51 @@ def _extract_float_list(data: Dict[str, Any], key: str) -> List[float]:
     return out
 
 
+
+
+def _infer_time_bucket(tte_days: float) -> str:
+    if tte_days <= 1:
+        return "0dte"
+    if tte_days <= 7:
+        return "weekly"
+    if tte_days <= 45:
+        return "swing"
+    return "long_dated"
+
+
+def _infer_market_regime(data: Dict[str, Any]) -> str:
+    vix = _extract_float(data, "vix", 18.0)
+    ret_1d = _extract_float(data, "ret_1d", 0.0)
+    realized_vol = _extract_float(data, "realized_vol", 0.2)
+
+    if vix >= 30 or realized_vol >= 0.45:
+        return "high_volatility"
+    if abs(ret_1d) >= 0.015:
+        return "trend"
+    return "range"
+
+
+def _select_pricing_model(data: Dict[str, Any]) -> str:
+    tte_days = _extract_float(data, "tte_days", 1.0)
+    bucket = _infer_time_bucket(tte_days)
+    if bucket == "0dte":
+        return "intraday_microstructure_greeks"
+    if bucket == "weekly":
+        return "black_scholes_greeks"
+    if bucket == "swing":
+        return "black_scholes_term_structure_proxy"
+    return "vol_surface_long_dated_proxy"
+
+
+def _build_context_meta(data: Dict[str, Any]) -> Dict[str, Any]:
+    tte_days = _extract_float(data, "tte_days", 1.0)
+    return {
+        "time_bucket": _infer_time_bucket(tte_days),
+        "market_regime": _infer_market_regime(data),
+        "pricing_model": _select_pricing_model(data),
+        "tte_days": tte_days,
+    }
+
 def _signal_from_rsi(data: Dict[str, Any]) -> tuple[int, float, Dict[str, Any]]:
     rsi = _extract_float(data, "rsi", 50.0)
     if rsi <= 30:
@@ -350,6 +395,9 @@ def execute_tool(tool_id: int, data: Dict[str, Any], symbol: str = "SPY") -> Opt
     else:
         signal, score, meta = logic(data)
 
+    context_meta = _build_context_meta(data)
+    merged_meta = {**context_meta, **meta}
+
     return {
         "tool_id": tool_id,
         "tool_name": TOOL_NAMES.get(tool_id, f"Tool {tool_id}"),
@@ -357,7 +405,7 @@ def execute_tool(tool_id: int, data: Dict[str, Any], symbol: str = "SPY") -> Opt
         "score": score,
         "timestamp": datetime.now().isoformat(),
         "symbol": symbol,
-        "metadata": meta,
+        "metadata": merged_meta,
     }
 
 

@@ -326,6 +326,16 @@ GET  /api/v1/paper/{user_id}/positions
 GET  /api/v1/paper/{user_id}/account
 ```
 
+
+### **Regime + Time Aware Signal Context**
+
+Consensus and tool responses now include a context block that classifies:
+- **Time bucket**: `0dte`, `weekly`, `swing`, `long_dated`
+- **Market regime**: `high_volatility`, `trend`, `range`
+- **Pricing model family** used for that horizon (intraday microstructure Greeks vs Black-Scholes term proxy vs long-dated surface proxy)
+
+This enables day-specific routing and model selection in execution pipelines.
+
 ### **WebSocket Live Updates**
 ```javascript
 const ws = new WebSocket('ws://localhost:8000/ws');
