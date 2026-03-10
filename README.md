@@ -11,6 +11,21 @@ A sophisticated, production-ready options trading platform featuring 52 speciali
 ### Prerequisites
 - Python 3.8+
 - pip
+- (Linux) system build tools for compiling native Python dependencies (`make`, `gcc`)
+
+If `make` or `gcc` are missing on Ubuntu/Debian, install them first:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential
+```
+
+Then verify:
+
+```bash
+make --version
+gcc --version
+```
 
 ### Setup
 ```bash
@@ -303,11 +318,38 @@ POST /api/v1/consensus
 GET /health
 ```
 
+### **Paper Trading API**
+```bash
+POST /api/v1/paper/{user_id}/positions
+POST /api/v1/paper/{user_id}/positions/{position_id}/close
+GET  /api/v1/paper/{user_id}/positions
+GET  /api/v1/paper/{user_id}/account
+```
+
+
+### **Regime + Time Aware Signal Context**
+
+Consensus and tool responses now include a context block that classifies:
+- **Time bucket**: `0dte`, `weekly`, `swing`, `long_dated`
+- **Market regime**: `high_volatility`, `trend`, `range`
+- **Pricing model family** used for that horizon (intraday microstructure Greeks vs Black-Scholes term proxy vs long-dated surface proxy)
+
+This enables day-specific routing and model selection in execution pipelines.
+
 ### **WebSocket Live Updates**
 ```javascript
 const ws = new WebSocket('ws://localhost:8000/ws');
+
 ws.onmessage = (event) => {
   console.log('Signal:', JSON.parse(event.data));
+};
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    tool_id: 10,
+    symbol: 'SPY',
+    data: { price: 530.2, rsi: 62 }
+  }));
 };
 ```
 
@@ -339,48 +381,35 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your_webhook
 
 ## 🧪 **Development**
 
-### **Create a New Tool**
+### **Add/Refine a Tool (Current Architecture)**
+
+The current runtime tool path is `production_tool_executor.py`.
+Add a new `_signal_*` function and register it in `tool_logic`.
 
 ```python
-from tools.library.base import BaseTool
+from production_tool_executor import _extract_float, _clamp_score
 
-class MyCustomTool(BaseTool):
-    TOOL_METADATA = {
-        "id": 53,
-        "name": "My Custom Tool",
-        "tier": "pro_plus",
-        "description": "Custom strategy"
-    }
-    
-    def run(self, data):
-        # Access Greek engines
-        from core.trainer.engines import GreekEngines
-        gamma = GreekEngines.calculate_gamma(data)
-        
-        # Your logic
-        if gamma > threshold:
-            return 1  # Signal
-        return 0  # No signal
+
+def _signal_my_tool(data):
+    price = _extract_float(data, "price", 0.0)
+    vwap = _extract_float(data, "vwap", price)
+    signal = 1 if price > vwap else -1 if price < vwap else 0
+    score = _clamp_score(0.5 + min(0.5, abs(price - vwap) / max(vwap, 1e-9)))
+    return signal, score, {"price": price, "vwap": vwap}
+
+# then register:
+# tool_logic[11] = _signal_my_tool
 ```
 
-### **Train & Distill**
+### **Use Greek Engines Correctly**
 
 ```python
-from core.trainer.trainer import train_rl_agent
-from core.distillation.distillation_engine import distill_to_tree
+from core.trainer.engines import GreekEngines
 
-# Train
-policy = train_rl_agent("my_tool", n_episodes=5000)
-
-# Distill to decision tree
-tree = distill_to_tree(policy, max_depth=5)
-
-# Auto-approve if improvement > 15%
-if tree.improvement > 0.15:
-    tree.deploy()
+gamma = GreekEngines.gamma(S=530.0, K=530.0, T=1/365, r=0.045, sigma=0.22)
+charm = GreekEngines.charm(S=530.0, K=530.0, T=1/365, r=0.045, sigma=0.22)
+vanna = GreekEngines.vanna(S=530.0, K=530.0, T=1/365, r=0.045, sigma=0.22)
 ```
-
----
 
 ## ⚠️ **Disclaimers**
 
@@ -404,50 +433,17 @@ if tree.improvement > 0.15:
 
 ## 📚 **Documentation**
 
-- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md) - **How Agents, Optimization Engines, and Smart Library Work Together**
-- [Tool Development Manual](docs/TOOL_DEVELOPMENT_MANUAL.md)
-- [Backtest Methodology](docs/BACKTEST_PROOF.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
-- [API Reference](docs/API_REFERENCE.md)
-
----
-
-## 📚 Documentation
-
+- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)
 - [Security Setup Guide](SECURITY_SETUP.md)
 - [Repository Manifest](REPOSITORY_MANIFEST.md)
-- [API Documentation](http://127.0.0.1:8000/docs) (when running)
-- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md)
-- [Tool Development Manual](docs/TOOL_DEVELOPMENT_MANUAL.md)
-- [Deployment Guide](docs/DEPLOYMENT.md)
+- [Performance Testing](PERFORMANCE_TESTING.md)
 
 ---
 
 ## 🤝 Contributing
 
-Contributions welcome! Please read CONTRIBUTING.md first.
-
-1. Fork the repository
+1. Fork the repo
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `pytest tests/ -v`
-5. Submit a pull request
-
----
-
-## 📝 License
-
-MIT License - See LICENSE file
-
----
-
-## 🆘 Support
-
-- **Issues**: https://github.com/jetgause/Library-/issues
-- **Security**: See [SECURITY_SETUP.md](SECURITY_SETUP.md)
-- **GitHub**: [@jetgause](https://github.com/jetgause)
-- **Repository**: [Library-](https://github.com/jetgause/Library-)
-
----
-
-**Built with ❤️ for the options trading community**
+4. Run tests (`pytest -q`)
+5. Open a pull request

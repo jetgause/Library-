@@ -4,8 +4,7 @@ Full paper trading implementation with P&L tracking, position management, and SQ
 """
 
 import sqlite3
-import pandas as pd
-import numpy as np
+import math
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, asdict
@@ -150,31 +149,30 @@ class PaperTradingEngine:
         conn = sqlite3.connect(self.db_path)
         
         # Load positions
-        positions_df = pd.read_sql_query("SELECT * FROM positions", conn)
-        for _, row in positions_df.iterrows():
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM positions")
+        for row in cursor.fetchall():
             pos = Position(
-                position_id=row['position_id'],
-                symbol=row['symbol'],
-                entry_time=datetime.fromisoformat(row['entry_time']),
-                entry_price=row['entry_price'],
-                quantity=row['quantity'],
-                side=row['side'],
-                stop_loss=row['stop_loss'],
-                take_profit=row['take_profit'],
-                tool_id=row['tool_id'],
-                tool_name=row['tool_name']
+                position_id=row[0],
+                symbol=row[1],
+                entry_time=datetime.fromisoformat(row[2]),
+                entry_price=row[3],
+                quantity=row[4],
+                side=row[5],
+                stop_loss=row[6],
+                take_profit=row[7],
+                tool_id=row[8],
+                tool_name=row[9]
             )
             self.positions[pos.position_id] = pos
-        
+
         # Load last account state
         try:
-            last_state = pd.read_sql_query(
-                "SELECT * FROM account_state ORDER BY timestamp DESC LIMIT 1", 
-                conn
-            )
-            if not last_state.empty:
-                self.cash = last_state['cash'].iloc[0]
-        except:
+            cursor.execute("SELECT cash FROM account_state ORDER BY timestamp DESC LIMIT 1")
+            row = cursor.fetchone()
+            if row:
+                self.cash = row[0]
+        except Exception:
             pass
         
         conn.close()
@@ -372,6 +370,14 @@ class PaperTradingEngine:
         
         return trade
     
+    def get_open_positions(self) -> List[Dict]:
+        """Return currently open positions as dictionaries."""
+        return [pos.to_dict() for pos in self.positions.values()]
+
+    def get_total_pnl(self) -> float:
+        """Return cumulative realized P&L from closed trades."""
+        return sum(trade.pnl for trade in self.trades)
+
     def get_total_equity(self, current_prices: Optional[Dict[str, float]] = None) -> float:
         """Calculate total account equity"""
         if current_prices is None:
@@ -399,19 +405,22 @@ class PaperTradingEngine:
                 'sharpe_ratio': 0.0
             }
         
-        trades_df = pd.DataFrame([t.to_dict() for t in self.trades])
-        
-        total_trades = len(trades_df)
-        winning_trades = len(trades_df[trades_df['pnl'] > 0])
+        pnl_values = [t.pnl for t in self.trades]
+        return_values = [t.pnl_pct for t in self.trades]
+
+        total_trades = len(self.trades)
+        winning_trades = sum(1 for pnl in pnl_values if pnl > 0)
         win_rate = winning_trades / total_trades if total_trades > 0 else 0
-        
-        avg_return = trades_df['pnl_pct'].mean()
-        total_pnl = trades_df['pnl'].sum()
-        
+
+        avg_return = sum(return_values) / total_trades if total_trades > 0 else 0.0
+        total_pnl = sum(pnl_values)
+
         # Calculate Sharpe ratio
-        if len(trades_df) > 1:
-            returns = trades_df['pnl_pct'].values
-            sharpe = (np.mean(returns) / np.std(returns)) * np.sqrt(252) if np.std(returns) > 0 else 0
+        if total_trades > 1:
+            mean_return = avg_return
+            variance = sum((r - mean_return) ** 2 for r in return_values) / total_trades
+            std_dev = math.sqrt(variance)
+            sharpe = (mean_return / std_dev) * math.sqrt(252) if std_dev > 0 else 0
         else:
             sharpe = 0
         

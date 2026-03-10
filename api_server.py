@@ -6,6 +6,7 @@ Production-ready API server with WebSocket support, user management, and tool ex
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
 import asyncio
@@ -13,6 +14,11 @@ import json
 from datetime import datetime
 import uvicorn
 import logging
+import os
+import secrets
+
+# Ensure local/dev runs have a secure key before strict config import
+os.environ.setdefault("SECRET_KEY", secrets.token_urlsafe(32))
 
 # Import internal modules
 from config import *
@@ -50,7 +56,7 @@ class ToolExecuteRequest(BaseModel):
     tool_id: int = Field(..., description="Tool ID to execute (1-52)")
     user_id: str = Field(..., description="User identifier")
     symbol: str = Field(default="SPY", description="Trading symbol")
-    data: Dict[str, Any] = Field(default={}, description="Market data for tool execution")
+    data: Dict[str, Any] = Field(default_factory=dict, description="Market data for tool execution")
 
 
 class ToolResponse(BaseModel):
@@ -59,7 +65,58 @@ class ToolResponse(BaseModel):
     signal: int
     score: float
     timestamp: str
-    metadata: Dict[str, Any] = {}
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+class ConsensusRequest(BaseModel):
+    tool_ids: List[int] = Field(..., min_length=1, max_length=52)
+    symbol: str = Field(default="SPY", min_length=1, max_length=20)
+    data: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ConsensusResponse(BaseModel):
+    symbol: str
+    tool_count: int
+    consensus_signal: int
+    confidence: float
+    normalized_score: float
+    tools: List[Dict[str, Any]]
+    timestamp: str
+
+
+class PaperPositionRequest(BaseModel):
+    symbol: str = Field(..., min_length=1, max_length=20)
+    quantity: int = Field(..., gt=0)
+    price: float = Field(..., gt=0)
+    side: str = Field(default="long", pattern="^(long|short)$")
+    stop_loss: Optional[float] = Field(default=None, gt=0)
+    take_profit: Optional[float] = Field(default=None, gt=0)
+    tool_id: Optional[int] = None
+    tool_name: Optional[str] = None
+
+
+class PaperCloseRequest(BaseModel):
+    price: float = Field(..., gt=0)
+    exit_reason: str = Field(default="manual", max_length=50)
+
+
+class PaperAccountResponse(BaseModel):
+    user_id: str
+    open_positions: List[Dict[str, Any]]
+    total_open_positions: int
+    total_realized_pnl: float
+    total_equity: float
+    stats: Dict[str, Any]
+
+
+def _get_paper_engine(user_id: str) -> PaperTradingEngine:
+    """Get or create a paper trading engine for a user."""
+    if user_id not in paper_trading_engines:
+        safe_user = "".join(ch for ch in user_id if ch.isalnum() or ch in ("_", "-")) or "default"
+        db_dir = Path("data")
+        db_dir.mkdir(parents=True, exist_ok=True)
+        db_path = db_dir / f"paper_trading_{safe_user}.db"
+        paper_trading_engines[user_id] = PaperTradingEngine(db_path=str(db_path))
+    return paper_trading_engines[user_id]
 
 
 @app.post("/api/v1/execute", response_model=ToolResponse)
@@ -91,6 +148,130 @@ async def execute_tool(request: ToolExecuteRequest):
     except Exception as e:
         logger.error(f"Error executing tool: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/consensus", response_model=ConsensusResponse)
+async def get_consensus_signal(request: ConsensusRequest):
+    """Compute weighted consensus signal from multiple tools."""
+    try:
+        invalid_ids = [tool_id for tool_id in request.tool_ids if not (1 <= tool_id <= 52)]
+        if invalid_ids:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid tool_ids: {invalid_ids}. Allowed range is 1-52.",
+            )
+
+        deduped_ids = list(dict.fromkeys(request.tool_ids))
+
+        from production_tool_executor import get_consensus
+
+        consensus = get_consensus(
+            tool_ids=deduped_ids,
+            data=request.data,
+            symbol=request.symbol,
+        )
+        return ConsensusResponse(**consensus)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting consensus: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/paper/{user_id}/positions")
+async def open_paper_position(user_id: str, request: PaperPositionRequest):
+    """Open a paper trading position for a user."""
+    engine = _get_paper_engine(user_id)
+    position = engine.open_position(
+        symbol=request.symbol,
+        quantity=request.quantity,
+        price=request.price,
+        side=request.side,
+        stop_loss=request.stop_loss,
+        take_profit=request.take_profit,
+        tool_id=request.tool_id,
+        tool_name=request.tool_name,
+    )
+    if position is None:
+        raise HTTPException(status_code=400, detail="Insufficient capital to open position")
+    return {"status": "opened", "position": position.to_dict(), "cash": engine.cash}
+
+
+@app.post("/api/v1/paper/{user_id}/positions/{position_id}/close")
+async def close_paper_position(user_id: str, position_id: str, request: PaperCloseRequest):
+    """Close a paper trading position for a user."""
+    engine = _get_paper_engine(user_id)
+    trade = engine.close_position(position_id=position_id, price=request.price, exit_reason=request.exit_reason)
+    if trade is None:
+        raise HTTPException(status_code=404, detail=f"Position {position_id} not found")
+    return {"status": "closed", "trade": trade.to_dict(), "cash": engine.cash}
+
+
+@app.get("/api/v1/paper/{user_id}/positions")
+async def list_open_paper_positions(user_id: str):
+    """List open paper positions for a user."""
+    engine = _get_paper_engine(user_id)
+    positions = engine.get_open_positions()
+    return {"user_id": user_id, "positions": positions, "count": len(positions)}
+
+
+@app.get("/api/v1/paper/{user_id}/account", response_model=PaperAccountResponse)
+async def get_paper_account(user_id: str):
+    """Get account summary and performance stats for a user's paper account."""
+    engine = _get_paper_engine(user_id)
+    positions = engine.get_open_positions()
+    stats = engine.get_performance_stats()
+    return PaperAccountResponse(
+        user_id=user_id,
+        open_positions=positions,
+        total_open_positions=len(positions),
+        total_realized_pnl=engine.get_total_pnl(),
+        total_equity=engine.get_total_equity(),
+        stats=stats,
+    )
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for live signal streaming and heartbeat messages."""
+    await websocket.accept()
+    active_websockets.append(websocket)
+    try:
+        await websocket.send_json({
+            "type": "welcome",
+            "message": "Connected to PULSE live stream",
+            "timestamp": datetime.now().isoformat(),
+        })
+        while True:
+            payload = await websocket.receive_json()
+            tool_id = int(payload.get("tool_id", 1))
+            symbol = str(payload.get("symbol", "SPY"))
+            data = payload.get("data", {})
+
+            from production_tool_executor import execute_tool as exec_tool
+            result = exec_tool(tool_id=tool_id, data=data, symbol=symbol)
+            if result is None:
+                await websocket.send_json({
+                    "type": "error",
+                    "detail": f"Tool {tool_id} not found",
+                    "timestamp": datetime.now().isoformat(),
+                })
+                continue
+
+            message = {
+                "type": "signal",
+                "payload": result,
+                "timestamp": datetime.now().isoformat(),
+            }
+            await websocket.send_json(message)
+    except WebSocketDisconnect:
+        logger.info("WebSocket client disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}")
+    finally:
+        if websocket in active_websockets:
+            active_websockets.remove(websocket)
+
 
 
 @app.get("/health")

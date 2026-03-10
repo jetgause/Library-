@@ -216,9 +216,36 @@ jobs:
             .pytest_cache
         continue-on-error: true
   
+  merge-readiness:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Run merge readiness checks (strict)
+        run: |
+          python scripts/check_merge_readiness.py
+
+      - name: Install minimal test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest
+
+      - name: Run artifact guard tests (strict)
+        run: |
+          pytest tests/test_repo_conflict_markers.py tests/test_no_merge_artifacts.py -q
+
   build-status:
     runs-on: ubuntu-latest
-    needs: [test, lint, security-scan, performance-test]
+    needs: [test, lint, security-scan, performance-test, merge-readiness]
     if: always()
     permissions:
       contents: read
