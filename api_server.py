@@ -3,14 +3,11 @@ PULSE Trading Platform - FastAPI Server
 Production-ready API server with WebSocket support, user management, and tool execution
 """
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional, Any
-import asyncio
-import json
 from datetime import datetime
 import uvicorn
 import logging
@@ -66,6 +63,7 @@ class ToolResponse(BaseModel):
     score: float
     timestamp: str
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
 
 class ConsensusRequest(BaseModel):
     tool_ids: List[int] = Field(..., min_length=1, max_length=52)

@@ -146,7 +146,7 @@ pulse-trading-platform/
 
 ---
 
-## ⚡ **Quick Start**
+## ⚡ **Local Runtime Flow**
 
 ### **1. Install Dependencies**
 
@@ -302,6 +302,20 @@ POST /api/v1/execute
   "user_id": "user123",
   "data": { ... }
 }
+```
+
+### **Implemented Endpoints (Current Server)**
+```text
+POST /api/v1/execute
+POST /api/v1/consensus
+POST /api/v1/paper/{user_id}/positions
+POST /api/v1/paper/{user_id}/positions/{position_id}/close
+GET  /api/v1/paper/{user_id}/positions
+GET  /api/v1/paper/{user_id}/account
+GET  /health
+GET  /health/security
+GET  /
+WS   /ws
 ```
 
 ### **Get Consensus**
